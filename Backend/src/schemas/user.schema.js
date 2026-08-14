@@ -2,10 +2,10 @@ import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema(
   {
-    // Basic Information
     fullname: {
       type: String,
       required: [true, "Full name is required"],
+      minlength: [3, "Name should contain more than 3 characters"],
       trim: true,
     },
 
@@ -21,22 +21,15 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: [true, "Password is required"],
       minlength: [8, "Password must be at least 8 characters"],
+      select: false,
     },
 
-    phoneNumber: {
-      type: String,
-      unique: true,
-      trim: true,
-    },
-
-    // Authorization
     role: {
       type: String,
       enum: ["user", "admin", "seller"],
       default: "user",
     },
 
-    // Account Information
     profilePicture: {
       type: String,
       default: "",
@@ -53,7 +46,6 @@ const userSchema = new mongoose.Schema(
       default: "active",
     },
 
-    // Relationships
     addresses: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -86,10 +78,13 @@ const userSchema = new mongoose.Schema(
         ref: "Product",
       },
     ],
+
+    resetPasswordToken: String,
+    resetPasswordExpire: Date,
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 const User = mongoose.model("User", userSchema);

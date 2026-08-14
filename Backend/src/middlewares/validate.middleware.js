@@ -1,5 +1,7 @@
-import jwt from 'jsonwebtoken'
-import User from '../schemas/user.schema.js'
+import jwt from "jsonwebtoken";
+import User from "../schemas/user.schema.js";
+import ErrorHandler from "../utils/handleError.js";
+
 export const validate = (schema) => {
   return (req, res, next) => {
     const result = schema.safeParse(req.body);
@@ -7,12 +9,10 @@ export const validate = (schema) => {
     if (!result.success) {
       return res.status(400).json({
         success: false,
-        errors: result.error.issues.map(
-          (issue) => ({
-            field: issue.path[0],
-            message: issue.message,
-          })
-        ),
+        errors: result.error.issues.map((issue) => ({
+          field: issue.path[0],
+          message: issue.message,
+        })),
       });
     }
 
@@ -21,45 +21,41 @@ export const validate = (schema) => {
     next();
   };
 };
-export const protectRoute = async (
-  req,
-  res,
-  next
-) => {
+
+export const protectRoute = async (req, res, next) => {
   try {
-    const token =
-      req.cookies.accessToken;
+    const token = req.cookies.accessToken;
 
     if (!token) {
-      return res.status(401).json({
-        success: false,
-        message: "Unauthorized",
-      });
+      return next(new ErrorHandler("Unauthorized", 401));
     }
 
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_ACCESS_SECRET
-    );
+    const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
 
-    const user = await User.findById(
-      decoded.userId
-    ).select("-password");
+    const user = await User.findById(decoded.userId).select("-password");
 
     if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: "User not found",
-      });
+      return next(new ErrorHandler("User not found", 401));
     }
 
     req.user = user;
 
     next();
   } catch (error) {
-    return res.status(401).json({
-      success: false,
-      message: "Invalid token",
-    });
+    return next(new ErrorHandler("Invalid token", 401));
   }
+};
+
+export const roleBasedAccess = (...roles) => {
+  return (req, res, next) => {
+    if (!roles.includes(req.user.role)) {
+      return next(
+        new ErrorHandler(
+          `Role-${req.user.role} is not allowed to access this resource`,
+          403,
+        ),
+      );
+    }
+    next();
+  };
 };

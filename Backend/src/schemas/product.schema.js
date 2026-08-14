@@ -39,7 +39,11 @@ const productSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
-
+    user: {
+      type: mongoose.Schema.ObjectId,
+      ref: "User",
+      required:true
+    },
     // Inventory
     stockQuantity: {
       type: Number,

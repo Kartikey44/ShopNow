@@ -25,13 +25,7 @@ class ApiFeatures {
     const queryCopy = { ...this.queryString };
 
     // Remove special fields
-    const removeFields = [
-      "keyword",
-      "page",
-      "limit",
-      "sort",
-      "fields",
-    ];
+    const removeFields = ["keyword", "page", "limit", "sort", "fields"];
 
     removeFields.forEach((field) => delete queryCopy[field]);
 
@@ -40,7 +34,7 @@ class ApiFeatures {
 
     queryStr = queryStr.replace(
       /\b(gt|gte|lt|lte|in)\b/g,
-      (match) => `$${match}`
+      (match) => `$${match}`,
     );
 
     this.query = this.query.find(JSON.parse(queryStr));
@@ -75,12 +69,20 @@ class ApiFeatures {
   }
 
   // Pagination
-  pagination(resultPerPage) {
+  // Pagination
+  pagination() {
+    const resultPerPage = Number(this.queryString.limit) || 10;
     const currentPage = Number(this.queryString.page) || 1;
 
-    const skip = resultPerPage * (currentPage - 1);
+    const offset = resultPerPage * (currentPage - 1);
 
-    this.query = this.query.skip(skip).limit(resultPerPage);
+    this.query = this.query.skip(offset).limit(resultPerPage);
+
+    this.paginationData = {
+      resultPerPage,
+      currentPage,
+      offset,
+    };
 
     return this;
   }

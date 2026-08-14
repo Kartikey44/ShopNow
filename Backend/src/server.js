@@ -1,12 +1,11 @@
-import dotenv from "dotenv";
-dotenv.config();
+import "dotenv/config";
 
 import { app } from "./app.js";
 import connectDB from "./configs/db.config.js";
 
 // Handle Uncaught Exceptions
 process.on("uncaughtException", (err) => {
-  console.log(`Error : ${err.message}`);
+  console.log(`Error: ${err.message}`);
   console.error("UNCAUGHT EXCEPTION! Shutting down...");
 
   process.exit(1);
@@ -24,7 +23,7 @@ const startServer = async () => {
 
     // Handle Unhandled Promise Rejections
     process.on("unhandledRejection", (err) => {
-      console.log(`Error : ${err.message}`);
+      console.log(`Error: ${err.message}`);
       console.error("UNHANDLED REJECTION! Shutting down...");
 
       server.close(() => {

@@ -7,6 +7,7 @@ const categorySchema = new mongoose.Schema(
       required: [true, "Category name is required"],
       unique: true,
       trim: true,
+      lowercase: true,
     },
 
     description: {
@@ -22,7 +23,7 @@ const categorySchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 const Category = mongoose.model("Category", categorySchema);

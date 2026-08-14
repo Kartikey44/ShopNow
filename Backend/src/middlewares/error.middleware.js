@@ -14,10 +14,14 @@ const errorMiddleware = (err, req, res, next) => {
       .join(", ");
   }
 
-  if (err.code === 11000) {
-    err.statusCode = 400;
-    err.message = `${Object.keys(err.keyValue)[0]} already exists`;
-  }
+ if (err.code === 11000) {
+   err.statusCode = 400;
+
+   const field = Object.keys(err.keyValue || {})[0];
+   const value = err.keyValue?.[field];
+
+   err.message = `${field} "${value}" already exists. Please login to continue.`;
+ }
 
   if (err.name === "JsonWebTokenError") {
     err.statusCode = 401;
