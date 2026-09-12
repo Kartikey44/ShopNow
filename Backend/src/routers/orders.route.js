@@ -2,7 +2,8 @@ import express from "express";
 
 import {
   createOrder,
-  getOrders,
+    getOrders,
+  getOrderStatus,
   getOrderById,
   cancelOrder,
   getAllOrders,
@@ -49,5 +50,7 @@ router.route("/:id").get(getOrderById);
 router.route("/:id/cancel").put(cancelOrder);
 
 router.route("/:id/pay").put(markOrderAsPaid);
+
+router.route("/:id/status").get(getOrderStatus);
 
 export default router;

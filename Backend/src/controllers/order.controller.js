@@ -496,3 +496,34 @@ export const markOrderAsPaid = catchAsyncErrors(async (req, res, next) => {
     order,
   });
 });
+// =====================================================
+// GET USER ORDER STATUS
+// =====================================================
+
+export const getOrderStatus = catchAsyncErrors(
+  async (req, res, next) => {
+    const userId = req.user._id;
+    const { id } = req.params;
+
+    const order = await Order.findOne({
+      _id: id,
+      user: userId,
+    }).select(
+      "_id orderStatus paymentInfo.paymentStatus createdAt deliveredAt"
+    );
+
+    if (!order) {
+      return next(
+        new ErrorHandler("Order not found", 404)
+      );
+    }
+
+    res.status(200).json({
+      success: true,
+      orderStatus: order.orderStatus,
+      paymentStatus: order.paymentInfo.paymentStatus,
+      createdAt: order.createdAt,
+      deliveredAt: order.deliveredAt,
+    });
+  }
+);

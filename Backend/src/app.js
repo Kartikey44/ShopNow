@@ -8,7 +8,7 @@ import categoryRouter from "./routers/categories.route.js";
 import cartRouter from "./routers/cart.route.js"
 import errorMiddleware from "./middlewares/error.middleware.js";
 import addressRouter from "./routers/address.route.js";
-
+import paymentRouter from "./routers/payment.route.js"
 export const app = express();
 
 app.use(express.json());
@@ -22,6 +22,7 @@ app.use("/api/categories", categoryRouter);
 app.use("/api/cart", cartRouter);
 app.use("/api/addresses", addressRouter);
 app.use("/api/orders", orderRouter);
+app.use("/api/payment", paymentRouter);
 
 // Error Middleware (Must be the last middleware)
 app.use(errorMiddleware);

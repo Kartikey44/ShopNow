@@ -1,5 +1,6 @@
 import React from "react";
 import { assets } from "../assets/frontend_assets/assets";
+import Footer from "./Footer";
 
 function Hero() {
   return (
@@ -19,7 +20,7 @@ function Hero() {
         </div>
       </div>
       {/* Right side */}
-    <img src={assets.hero_img} className="w-full sm:w-1/2" alt="" />
+      <img src={assets.hero_img} className="w-full sm:w-1/2" alt="" />
     </div>
   );
 }
