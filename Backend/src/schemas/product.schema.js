@@ -27,6 +27,13 @@ const productSchema = new mongoose.Schema(
       required: true,
     },
 
+    // Supplier
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+
     // Pricing
     originalPrice: {
       type: Number,
@@ -39,11 +46,7 @@ const productSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
-    user: {
-      type: mongoose.Schema.ObjectId,
-      ref: "User",
-      required:true
-    },
+
     // Inventory
     stockQuantity: {
       type: Number,
@@ -65,12 +68,10 @@ const productSchema = new mongoose.Schema(
         },
         url: {
           type: String,
-          required:true,
-        }
+          required: true,
+        },
       },
     ],
-
-    // Ratings
     averageRating: {
       type: Number,
       default: 0,

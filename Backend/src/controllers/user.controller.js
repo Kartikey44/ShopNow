@@ -10,6 +10,7 @@ import {
 
 import ErrorHandler from "../utils/handleError.js";
 import { catchAsyncErrors } from "../middlewares/catchAsyncErrors.js";
+import { success } from "zod";
 
 // ================= REGISTER =================
 
@@ -370,3 +371,55 @@ export const updateProfile = catchAsyncErrors(async (req, res, next) => {
     },
   });
 });
+
+export const getUserList = catchAsyncErrors(async (req, res, next) => {
+  const users = await User.find();
+  res.status(200).json({
+    success: true,
+    users,
+  });
+});
+export const getSingleUser = catchAsyncErrors(async (req, res, next) => {
+  const user = await User.findById(req.params.id);
+  if (!user) {
+    return next(
+      new ErrorHandler(`User doesn't exist with this id: ${req.param.id}`, 400),
+    );
+  }
+  res.status(200).json({
+    success: true,
+    user,
+  });
+});
+export const updateUserRole = catchAsyncErrors(async (req, res, next) => {
+  const { role } = req.body;
+
+  const newUserData = {
+    role,
+  };
+
+  const user = await User.findByIdAndUpdate(req.params.id, newUserData, {
+    new: true,
+    runValidators: true,
+  });
+
+  if (!user) {
+    return next(new ErrorHandler("User doesn't exist", 400));
+  }
+
+  res.status(200).json({
+    success: true,
+    user,
+  });
+});
+export const deleteUser = catchAsyncErrors(async (req, res, next) => {
+  const user = await User.findById(req.params.id);
+  if (!user) {
+    return next (new ErrorHandler("User doesn't exist",400))
+  }
+  await User.findByIdAndDelete(req.params.id);
+  res.status(200).json({
+    success: true,
+    message:"User deleted successfully"
+  })
+})
