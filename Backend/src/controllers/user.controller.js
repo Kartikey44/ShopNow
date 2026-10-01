@@ -1,4 +1,5 @@
 import User from "../schemas/user.schema.js";
+import crypto from "crypto";
 import { sendEmail } from "../services/email.service.js";
 import {
   generateAuthTokens,
@@ -15,7 +16,31 @@ import { success } from "zod";
 // ================= REGISTER =================
 
 export const register = catchAsyncErrors(async (req, res, next) => {
-  const { fullname, email, password } = req.body;
+  const {
+    fullname,
+    email,
+    password,
+    role = "user",
+    adminInviteCode,
+  } = req.body;
+
+  if (role === "admin") {
+    console.log("Expected:", process.env.ADMIN_SIGNUP_CODE);
+    console.log("Received:", adminInviteCode);
+    const expectedCode = Buffer.from(process.env.ADMIN_SIGNUP_CODE || "");
+    const submittedCode = Buffer.from(adminInviteCode || "");
+
+    const isValidAdminCode =
+      expectedCode.length > 0 &&
+      submittedCode.length === expectedCode.length &&
+      crypto.timingSafeEqual(submittedCode, expectedCode);
+
+    if (!isValidAdminCode) {
+      return next(
+        new ErrorHandler("A valid admin invitation code is required", 403),
+      );
+    }
+  }
 
   const normalizedEmail = email.trim().toLowerCase();
 
@@ -35,7 +60,7 @@ export const register = catchAsyncErrors(async (req, res, next) => {
     fullname,
     email: normalizedEmail,
     password: hashedPassword,
-    role: "user",
+    role,
   });
 
   const { accessToken, refreshToken } = generateAuthTokens(user);
@@ -415,11 +440,11 @@ export const updateUserRole = catchAsyncErrors(async (req, res, next) => {
 export const deleteUser = catchAsyncErrors(async (req, res, next) => {
   const user = await User.findById(req.params.id);
   if (!user) {
-    return next (new ErrorHandler("User doesn't exist",400))
+    return next(new ErrorHandler("User doesn't exist", 400));
   }
   await User.findByIdAndDelete(req.params.id);
   res.status(200).json({
     success: true,
-    message:"User deleted successfully"
-  })
-})
+    message: "User deleted successfully",
+  });
+});

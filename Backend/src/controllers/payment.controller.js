@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import razorpay from "../config/razorpay.js";
+import razorpay from "../configs/razorpay.config.js";
 import { catchAsyncErrors } from "../middlewares/catchAsyncErrors.js";
 import ErrorHandler from "../utils/handleError.js";
 

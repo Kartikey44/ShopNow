@@ -21,8 +21,8 @@ const router = Router();
 
 // ==================== PRODUCTS ====================
 
-// Get all products
-router.route("/").get(protectRoute, getProducts);
+// Public clothing catalog
+router.route("/").get(getProducts);
 
 // Get admin products
 router
@@ -34,8 +34,10 @@ router
   .route("/admin/product/create")
   .post(protectRoute, roleBasedAccess("admin"), createProduct);
 
-// Get single product
-router.route("/:id").get(protectRoute, getProductById);
+// Public product and review reads
+router.route("/:id/reviews").get(getProductReviews);
+
+router.route("/:id").get(getProductById);
 
 // Update/Delete product
 router
@@ -45,8 +47,6 @@ router
 
 // ==================== REVIEWS ====================
 router.route("/:id/review").post(protectRoute, createProductReview);
-
-router.route("/:id/reviews").get(protectRoute, getProductReviews);
 
 router.route("/reviews/:id").delete(protectRoute, deleteProductReview);
 

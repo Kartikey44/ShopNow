@@ -31,6 +31,10 @@ export const registerSchema = z.object({
       "Password must contain at least one special character",
     ),
 
+  role: z.enum(["user", "admin"]).default("user"),
+
+  adminInviteCode: z.string().min(1).max(256).optional(),
+
   profilePic: z.string().url("Invalid profile picture URL").optional(),
 });
 

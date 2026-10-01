@@ -19,6 +19,7 @@ const startServer = async () => {
 
     const server = app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
+      console.log(`Frontend URL: ${process.env.FRONTEND_URL}`);
     });
 
     // Handle Unhandled Promise Rejections

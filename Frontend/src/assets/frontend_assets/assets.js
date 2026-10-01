@@ -73,6 +73,13 @@ import contact_img from './contact_img.png'
 import razorpay_logo from './razorpay_logo.png'
 import stripe_logo from './stripe_logo.png'
 import cross_icon from './cross_icon.png'
+import {
+  Sparkles,
+  TrendingUp,
+  Tag,
+  Flame,
+  Star,
+} from "lucide-react";
 
 export const assets = {
     logo,
@@ -721,3 +728,51 @@ export const products = [
     }
 
 ]
+export const heroImages = [p_img1, p_img7, p_img13, p_img21, p_img28, p_img35];
+export const featuredCategories = [
+  {
+    id: 1,
+    title: "New Arrivals",
+    description: "Fresh styles just added to the collection.",
+    label: "JUST IN",
+    icon: Sparkles,
+    image: "/images/new-arrivals.jpg",
+    path: "/collection?category=new-arrivals",
+  },
+  {
+    id: 2,
+    title: "Best of the Week",
+    description: "The styles everyone is loving this week.",
+    label: "MOST LOVED",
+    icon: TrendingUp,
+    image: "/images/best-week.jpg",
+    path: "/collection?category=best-week",
+  },
+  {
+    id: 3,
+    title: "Discount & Offers",
+    description: "Premium styles at prices worth grabbing.",
+    label: "UP TO 50% OFF",
+    icon: Tag,
+    image: "/images/offers.jpg",
+    path: "/collection?category=offers",
+  },
+  {
+    id: 4,
+    title: "Trending Now",
+    description: "Discover what's making waves right now.",
+    label: "TRENDING",
+    icon: Flame,
+    image: "/images/trending.jpg",
+    path: "/collection?category=trending",
+  },
+  {
+    id: 5,
+    title: "Editor's Picks",
+    description: "Handpicked pieces selected by our team.",
+    label: "CURATED",
+    icon: Star,
+    image: "/images/editors-picks.jpg",
+    path: "/collection?category=editors-picks",
+  },
+];

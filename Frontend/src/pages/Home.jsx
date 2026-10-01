@@ -1,12 +1,16 @@
-import React from 'react'
-import Hero from '../components/Hero'
+import React from "react";
+import Navbar from "../components/Navbar";
+import Hero from "../components/Hero";
+import FeaturedProducts from "../components/FeaturedProducts";
+import Footer from "../components/Footer";
 
 function Home() {
   return (
-    <div>
-      <Hero/>
-    </div>
-  )
+    <>
+      <Hero />
+      <FeaturedProducts />
+    </>
+  );
 }
 
-export default Home
+export default Home;

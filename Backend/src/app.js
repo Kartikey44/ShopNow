@@ -1,15 +1,27 @@
+import "dotenv/config";
+
 import express from "express";
 import cookieParser from "cookie-parser";
+import cors from "cors";
 
 import authRouter from "./routers/user.route.js";
 import productRouter from "./routers/product.route.js";
 import orderRouter from "./routers/orders.route.js";
 import categoryRouter from "./routers/categories.route.js";
-import cartRouter from "./routers/cart.route.js"
+import cartRouter from "./routers/cart.route.js";
 import errorMiddleware from "./middlewares/error.middleware.js";
 import addressRouter from "./routers/address.route.js";
-import paymentRouter from "./routers/payment.route.js"
+import paymentRouter from "./routers/payment.route.js";
+
 export const app = express();
+
+// CORS
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL,
+    credentials: true,
+  }),
+);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -24,5 +36,5 @@ app.use("/api/addresses", addressRouter);
 app.use("/api/orders", orderRouter);
 app.use("/api/payment", paymentRouter);
 
-// Error Middleware (Must be the last middleware)
+// Error Middleware
 app.use(errorMiddleware);
