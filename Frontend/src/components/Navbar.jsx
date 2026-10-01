@@ -18,7 +18,7 @@ function Navbar() {
 
   return (
     <>
-      <div className="hidden md:block absolute bg-transparent top-10 left-0 w-full z-50 px-6">
+      <div className="hidden md:block fixed top-10 left-0 w-full z-50 px-6">
         <div className="mx-auto flex items-center justify-around">
           {/* Logo */}
           <Link
@@ -85,10 +85,10 @@ function Navbar() {
      shadow-[0_0_25px_rgba(255,255,255,0.35)]
      hover:shadow-[0_0_35px_rgba(255,255,255,0.6)]
               "
-            >
-              <User size={18} />
-              Logout
-            </button>
+              >
+                <User size={18} />
+                Logout
+              </button>
             ) : (
               <Link
                 to="/login"
@@ -115,7 +115,7 @@ function Navbar() {
           MOBILE TOP BAR
       ====================================================== */}
 
-      <div className="md:hidden absolute top-6 left-0 w-full z-50 px-5">
+      <div className="md:hidden fixed top-6 left-0 w-full z-50 px-5">
         <div className="flex items-center justify-between">
           {/* Logo */}
           <Link to="/" className="text-xl font-bold text-white">
@@ -133,7 +133,8 @@ function Navbar() {
           MOBILE BOTTOM NAVIGATION
       ====================================================== */}
 
-      <nav className="  md:hidden  fixed  bottom-0  left-0  z-50  w-full  h-18  px-5  pb-[env(safe-area-inset-bottom)] bg-black/90 backdrop-blur-xl border-t border-white/10">
+      {/* MOBILE BOTTOM NAV */}
+      <nav className="md:hidden fixed bottom-0 left-0 z-100 w-full h-18 px-5 pb-[env(safe-area-inset-bottom)] bg-black/90 backdrop-blur-xl border-t border-white/10">
         <div className="h-full flex items-center justify-around">
           {/* Home */}
           <Link to="/" className="flex flex-col items-center gap-1 text-white">
@@ -158,7 +159,7 @@ function Navbar() {
             <ShoppingBag size={21} />
 
             <span className="absolute -top-1 ml-5 flex items-center justify-center w-4 h-4 rounded-full bg-white text-black text-[9px] font-bold">
-                {cartItemCount}
+              {cartItemCount}
             </span>
 
             <span className="text-[10px]">Cart</span>
