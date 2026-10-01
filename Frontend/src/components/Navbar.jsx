@@ -1,4 +1,3 @@
-import { navbar } from "../assets/data/data.js";
 import { Link } from "react-router-dom";
 import { Search, ShoppingBag, User, House,Package } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
@@ -7,7 +6,7 @@ import {
   logoutUser,
   selectCurrentUser,
 } from "../features/auth/authSlice";
-
+import { navbar } from "../assets/data/data";
 function Navbar() {
   const dispatch = useDispatch();
   const cartItemCount = useSelector(selectCartItemCount);
