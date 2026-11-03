@@ -40,7 +40,7 @@ ShopNow is a React/Vite storefront and an Express/MongoDB API. The storefront su
 
    This idempotently creates five categories and 45 sample products. Seed image URLs are external Unsplash URLs and are not Cloudinary uploads.
 
-The backend listens on port 5000 unless `PORT` is configured. The frontend API base URL comes from `VITE_BACKEND_SERVER` and should include `/api`, e.g. `http://localhost:5000/api`.
+The backend listens on port 5000 unless `PORT` is configured. The frontend API base URL comes from `VITE_BACKEND_SERVER`; `/api` is added automatically when omitted. For production, set this to the deployed backend origin (for example, `https://shopnow-d3tl.onrender.com`) and set the backend's `FRONTEND_URL` to the exact deployed frontend origin to allow credentialed browser requests. Redeploy the frontend after changing its `VITE_` variable.
 
 ## External integrations
 
