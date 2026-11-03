@@ -33,8 +33,6 @@ export const registerSchema = z.object({
 
   role: z.enum(["user", "admin"]).default("user"),
 
-  adminInviteCode: z.string().min(1).max(256).optional(),
-
   profilePic: z.string().url("Invalid profile picture URL").optional(),
 });
 

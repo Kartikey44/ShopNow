@@ -51,7 +51,6 @@ function Signup() {
     email: "",
     password: "",
     confirmPassword: "",
-    adminInviteCode: "",
     acceptedTerms: false,
   });
   const [error, setError] = useState("");
@@ -80,20 +79,12 @@ function Signup() {
       return;
     }
 
-    if (role === "admin" && !form.adminInviteCode.trim()) {
-      setError("An admin invitation code is required.");
-      return;
-    }
-
     try {
       const registeredUser = await dispatch(registerUser({
         fullname: form.fullname,
         email: form.email,
         password: form.password,
         role,
-        ...(role === "admin" && {
-          adminInviteCode: form.adminInviteCode,
-        }),
       })).unwrap();
 
       navigate(registeredUser.role === "admin" ? "/admin" : "/");
@@ -193,28 +184,6 @@ function Signup() {
                 value={form.email}
               />
             </div>
-
-            {role === "admin" && (
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-300" htmlFor="adminInviteCode">
-                  Admin invitation code
-                </label>
-                <input
-                  autoComplete="off"
-                  className="h-12 w-full rounded-lg border border-emerald-900/70 bg-[#07130f] px-4 text-white outline-none transition placeholder:text-gray-600 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                  id="adminInviteCode"
-                  name="adminInviteCode"
-                  onChange={updateField}
-                  placeholder="Enter the code provided to you"
-                  required
-                  type="password"
-                  value={form.adminInviteCode}
-                />
-                <p className="mt-2 text-xs text-gray-500">
-                  Admin accounts require an invitation from ShopNow.
-                </p>
-              </div>
-            )}
 
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-300" htmlFor="password">
