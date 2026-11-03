@@ -2,9 +2,104 @@ import Order from "../schemas/order.schema.js";
 import Cart from "../schemas/cart.schema.js";
 import Address from "../schemas/address.schema.js";
 import Product from "../schemas/product.schema.js";
+import mongoose from "mongoose";
 
 import { catchAsyncErrors } from "../middlewares/catchAsyncErrors.js";
 import ErrorHandler from "../utils/handleError.js";
+
+const supportsTransactions = () =>
+  ["ReplicaSetWithPrimary", "Sharded"].includes(
+    mongoose.connection.client?.topology?.description?.type,
+  );
+
+const withOptionalTransaction = async (operation) => {
+  const session = await mongoose.startSession();
+  try {
+    if (supportsTransactions()) {
+      return await session.withTransaction(() => operation(session));
+    }
+    return await operation(undefined);
+  } finally {
+    await session.endSession();
+  }
+};
+
+const cancelAndRestoreStock = async ({ id, userId }) =>
+  withOptionalTransaction(async (session) => {
+    const filter = { _id: id };
+    if (userId) filter.user = userId;
+
+    const orderQuery = Order.findOne(filter);
+    if (session) orderQuery.session(session);
+    const order = await orderQuery;
+    if (!order) throw new ErrorHandler("Order not found", 404);
+    if (order.orderStatus === "CANCELLED") {
+      throw new ErrorHandler("Order is already cancelled", 400);
+    }
+    if (
+      userId &&
+      !["PENDING", "CONFIRMED"].includes(order.orderStatus)
+    ) {
+      throw new ErrorHandler("Order cannot be cancelled at this stage", 400);
+    }
+    if (
+      !userId &&
+      ["DELIVERED", "RETURNED"].includes(order.orderStatus)
+    ) {
+      throw new ErrorHandler(
+        "Delivered or returned order cannot be cancelled",
+        400,
+      );
+    }
+
+    const previousStatus = order.orderStatus;
+    const previousPaymentStatus = order.paymentInfo.paymentStatus;
+    const updates = { orderStatus: "CANCELLED" };
+    if (userId && previousPaymentStatus === "PAID") {
+      updates["paymentInfo.paymentStatus"] = "REFUNDED";
+    }
+
+    const cancelledOrder = await Order.findOneAndUpdate(
+      { ...filter, orderStatus: previousStatus },
+      { $set: updates },
+      { returnDocument: "after", session },
+    );
+    if (!cancelledOrder) {
+      throw new ErrorHandler("Order status changed; refresh and try again", 409);
+    }
+
+    const restoredProducts = [];
+    try {
+      for (const item of order.products) {
+        const product = await Product.findByIdAndUpdate(
+          item.product,
+          { $inc: { stockQuantity: item.quantity } },
+          { session },
+        );
+        if (product) restoredProducts.push(item);
+      }
+    } catch (error) {
+      if (!session) {
+        for (const item of restoredProducts) {
+          await Product.findByIdAndUpdate(item.product, {
+            $inc: { stockQuantity: -item.quantity },
+          });
+        }
+        await Order.findOneAndUpdate(
+          { _id: order._id, orderStatus: "CANCELLED" },
+          {
+            $set: {
+              orderStatus: previousStatus,
+              "paymentInfo.paymentStatus": previousPaymentStatus,
+            },
+          },
+        );
+      }
+      throw error;
+    }
+
+    return cancelledOrder;
+  });
 
 // =====================================================
 // 1. CREATE ORDER
@@ -12,186 +107,139 @@ import ErrorHandler from "../utils/handleError.js";
 
 export const createOrder = catchAsyncErrors(async (req, res, next) => {
   const userId = req.user._id;
-
   const { shippingAddress, paymentMethod } = req.body;
-
-  // -----------------------------------------
-  // Validate shipping address
-  // -----------------------------------------
-
   if (!shippingAddress) {
     return next(new ErrorHandler("Shipping address is required", 400));
   }
-
-  // Find address belonging to current user
-  const address = await Address.findOne({
-    _id: shippingAddress,
-    user: userId,
-  });
-
-  if (!address) {
-    return next(new ErrorHandler("Shipping address not found", 404));
-  }
-
-  // -----------------------------------------
-  // Validate payment method
-  // -----------------------------------------
-
   if (!paymentMethod) {
     return next(new ErrorHandler("Payment method is required", 400));
   }
 
-  const allowedPaymentMethods = ["COD", "RAZORPAY", "STRIPE"];
+  const allowedPaymentMethods = ["COD", "RAZORPAY", "STRIPE", "MOCK"];
 
   if (!allowedPaymentMethods.includes(paymentMethod)) {
     return next(new ErrorHandler("Invalid payment method", 400));
   }
 
-  // -----------------------------------------
-  // Find user's cart
-  // -----------------------------------------
-
-  const cart = await Cart.findOne({
-    user: userId,
-  }).populate("items.product");
-
-  if (!cart || cart.items.length === 0) {
-    return next(new ErrorHandler("Cart is empty", 400));
+  if (!mongoose.isValidObjectId(shippingAddress)) {
+    return next(new ErrorHandler("Shipping address is invalid", 400));
   }
 
-  // -----------------------------------------
-  // Validate products and stock
-  // -----------------------------------------
-
-  const products = [];
-
-  for (const item of cart.items) {
-    const product = item.product;
-
-    if (!product) {
-      return next(
-        new ErrorHandler("A product in your cart no longer exists", 400),
-      );
-    }
-
-    if (!product.availability) {
-      return next(
-        new ErrorHandler(
-          `${product.productName} is currently unavailable`,
-          400,
-        ),
-      );
-    }
-
-    if (product.stockQuantity < item.quantity) {
-      return next(
-        new ErrorHandler(
-          `Only ${product.stockQuantity} units of ${product.productName} are available`,
-          400,
-        ),
-      );
-    }
-
-    products.push({
-      product: product._id,
-      quantity: item.quantity,
-
-      // Price stored in cart
-      price: item.price,
-    });
-  }
-
-  // -----------------------------------------
-  // Calculate pricing
-  // -----------------------------------------
-
-  const subtotal = products.reduce(
-    (total, item) => total + item.price * item.quantity,
-    0,
+  const session = await mongoose.startSession();
+  let order;
+  const transactionCapable = ["ReplicaSetWithPrimary", "Sharded"].includes(
+    mongoose.connection.client?.topology?.description?.type,
   );
+  const reservedProducts = [];
+  const createOrderRecord = async (dbSession) => {
+    const addressQuery = Address.findOne({ _id: shippingAddress, user: userId });
+    if (dbSession) addressQuery.session(dbSession);
+    const address = await addressQuery;
+    if (!address) throw new ErrorHandler("Shipping address not found", 404);
 
-  const tax = Number((subtotal * 0.18).toFixed(2));
+    const cartQuery = Cart.findOne({ user: userId }).populate("items.product");
+    if (dbSession) cartQuery.session(dbSession);
+    const cart = await cartQuery;
+    if (!cart || cart.items.length === 0) throw new ErrorHandler("Cart is empty", 400);
 
-  const shippingFee = subtotal >= 500 ? 0 : 50;
+    const products = [];
+    for (const item of cart.items) {
+      const product = item.product;
+      if (!product || !product.availability) {
+        throw new ErrorHandler("A product in your cart is no longer available", 400);
+      }
 
-  const discount = 0;
+      const reservedProduct = await Product.findOneAndUpdate(
+        {
+          _id: product._id,
+          availability: true,
+          stockQuantity: { $gte: item.quantity },
+        },
+        { $inc: { stockQuantity: -item.quantity } },
+        { returnDocument: "after", session: dbSession || undefined },
+      );
+      if (!reservedProduct) {
+        throw new ErrorHandler(
+          `Insufficient stock for ${product.productName}`,
+          400,
+        );
+      }
+      reservedProducts.push({ product: product._id, quantity: item.quantity });
+      const price =
+        product.discountPrice > 0 ? product.discountPrice : product.originalPrice;
+      products.push({ product: product._id, quantity: item.quantity, price });
+    }
 
-  const grandTotal = Number(
-    (subtotal + tax + shippingFee - discount).toFixed(2),
-  );
+    const subtotal = Number(
+      products.reduce((total, item) => total + item.price * item.quantity, 0).toFixed(2),
+    );
+    const tax = Number((subtotal * 0.18).toFixed(2));
+    const shippingFee = subtotal >= 500 ? 0 : 50;
+    const discount = 0;
+    const grandTotal = Number((subtotal + tax + shippingFee - discount).toFixed(2));
+    const shippingAddressSnapshot = {
+      fullname: address.fullname,
+      mobile: address.mobile,
+      houseNo: address.houseNo,
+      street: address.street,
+      city: address.city,
+      state: address.state,
+      country: address.country,
+      pincode: address.pincode,
+      addressType: address.addressType,
+    };
+    const orderStatus = ["COD", "MOCK"].includes(paymentMethod)
+      ? "CONFIRMED"
+      : "PENDING";
+    const paymentStatus = paymentMethod === "MOCK" ? "PAID" : "PENDING";
+    const orderData = {
+      user: userId,
+      products,
+      shippingAddress: shippingAddressSnapshot,
+      paymentInfo: { paymentMethod, paymentStatus },
+      orderStatus,
+      subtotal,
+      tax,
+      shippingFee,
+      discount,
+      grandTotal,
+      ...(paymentStatus === "PAID" ? { paidAt: new Date() } : {}),
+    };
+    const created = dbSession
+      ? await Order.create([orderData], { session: dbSession })
+      : [await Order.create(orderData)];
+    order = created[0];
 
-  // -----------------------------------------
-  // Create shipping address snapshot
-  // -----------------------------------------
-
-  const shippingAddressSnapshot = {
-    fullname: address.fullname,
-    mobile: address.mobile,
-    houseNo: address.houseNo,
-    street: address.street,
-    city: address.city,
-    state: address.state,
-    country: address.country,
-    pincode: address.pincode,
-    addressType: address.addressType,
+    cart.items = [];
+    cart.subtotal = 0;
+    cart.discount = 0;
+    cart.tax = 0;
+    cart.finalTotal = 0;
+    await cart.save(dbSession ? { session: dbSession } : undefined);
+    return created[0];
   };
 
-  // -----------------------------------------
-  // Create order
-  // -----------------------------------------
-
-  const order = await Order.create({
-    user: userId,
-
-    products,
-
-    shippingAddress: shippingAddressSnapshot,
-
-    paymentInfo: {
-      paymentMethod,
-      paymentStatus: "PENDING",
-    },
-
-    orderStatus: paymentMethod === "COD" ? "CONFIRMED" : "PENDING",
-
-    subtotal,
-    tax,
-    shippingFee,
-    discount,
-    grandTotal,
-  });
-
-  // -----------------------------------------
-  // For COD:
-  // Decrease stock immediately
-  // -----------------------------------------
-
-  if (paymentMethod === "COD") {
-    for (const item of products) {
-      await Product.findByIdAndUpdate(item.product, {
-        $inc: {
-          stockQuantity: -item.quantity,
-        },
+  try {
+    if (transactionCapable) {
+      await session.withTransaction(async () => {
+        order = await createOrderRecord(session);
       });
+    } else {
+      try {
+        order = await createOrderRecord(undefined);
+      } catch (error) {
+        if (order?._id) await Order.findByIdAndDelete(order._id);
+        for (const item of reservedProducts) {
+          await Product.findByIdAndUpdate(item.product, {
+            $inc: { stockQuantity: item.quantity },
+          });
+        }
+        throw error;
+      }
     }
+  } finally {
+    await session.endSession();
   }
-
-  // -----------------------------------------
-  // Clear cart
-  // -----------------------------------------
-
-  cart.items = [];
-  cart.subtotal = 0;
-  cart.discount = 0;
-  cart.tax = 0;
-  cart.finalTotal = 0;
-
-  await cart.save();
-
-  // -----------------------------------------
-  // Populate products
-  // -----------------------------------------
-
   await order.populate({
     path: "products.product",
     select: "productName images originalPrice discountPrice",
@@ -262,43 +310,10 @@ export const getOrderById = catchAsyncErrors(async (req, res, next) => {
 // =====================================================
 
 export const cancelOrder = catchAsyncErrors(async (req, res, next) => {
-  const userId = req.user._id;
-  const { id } = req.params;
-
-  const order = await Order.findOne({
-    _id: id,
-    user: userId,
+  const order = await cancelAndRestoreStock({
+    id: req.params.id,
+    userId: req.user._id,
   });
-
-  if (!order) {
-    return next(new ErrorHandler("Order not found", 404));
-  }
-
-  // Only allow cancellation before shipping
-  if (!["PENDING", "CONFIRMED"].includes(order.orderStatus)) {
-    return next(
-      new ErrorHandler("Order cannot be cancelled at this stage", 400),
-    );
-  }
-
-  // Restore stock
-  for (const item of order.products) {
-    await Product.findByIdAndUpdate(item.product, {
-      $inc: {
-        stockQuantity: item.quantity,
-      },
-    });
-  }
-
-  order.orderStatus = "CANCELLED";
-
-  // If payment was already made,
-  // refund should be handled separately.
-  if (order.paymentInfo.paymentStatus === "PAID") {
-    order.paymentInfo.paymentStatus = "REFUNDED";
-  }
-
-  await order.save();
 
   res.status(200).json({
     success: true,
@@ -378,51 +393,9 @@ export const updateOrderStatus = catchAsyncErrors(async (req, res, next) => {
   if (!allowedStatuses.includes(orderStatus)) {
     return next(new ErrorHandler("Invalid order status", 400));
   }
-
-  const order = await Order.findById(id);
-
-  if (!order) {
-    return next(new ErrorHandler("Order not found", 404));
+  if (orderStatus === "CANCELLED") {
+    return cancelOrderByAdmin(req, res, next);
   }
-
-  // Don't update an already cancelled order
-  if (order.orderStatus === "CANCELLED" && orderStatus !== "CANCELLED") {
-    return next(new ErrorHandler("Cancelled order cannot be updated", 400));
-  }
-
-  // Handle cancellation by admin
-  if (orderStatus === "CANCELLED" && order.orderStatus !== "CANCELLED") {
-    for (const item of order.products) {
-      await Product.findByIdAndUpdate(item.product, {
-        $inc: {
-          stockQuantity: item.quantity,
-        },
-      });
-    }
-  }
-
-  order.orderStatus = orderStatus;
-
-  // Set delivery date
-  if (orderStatus === "DELIVERED") {
-    order.deliveredAt = new Date();
-  }
-
-  await order.save();
-
-  res.status(200).json({
-    success: true,
-    message: "Order status updated successfully",
-    order,
-  });
-});
-
-// =====================================================
-// 8. ADMIN - CANCEL ORDER
-// =====================================================
-
-export const cancelOrderByAdmin = catchAsyncErrors(async (req, res, next) => {
-  const { id } = req.params;
 
   const order = await Order.findById(id);
 
@@ -431,27 +404,33 @@ export const cancelOrderByAdmin = catchAsyncErrors(async (req, res, next) => {
   }
 
   if (order.orderStatus === "CANCELLED") {
-    return next(new ErrorHandler("Order is already cancelled", 400));
+    return next(new ErrorHandler("Cancelled order cannot be updated", 400));
   }
 
-  if (["DELIVERED", "RETURNED"].includes(order.orderStatus)) {
-    return next(
-      new ErrorHandler("Delivered or returned order cannot be cancelled", 400),
-    );
+  const updates = { orderStatus };
+  if (orderStatus === "DELIVERED") updates.deliveredAt = new Date();
+  const updatedOrder = await Order.findOneAndUpdate(
+    { _id: id, orderStatus: order.orderStatus },
+    { $set: updates },
+    { returnDocument: "after", runValidators: true },
+  );
+  if (!updatedOrder) {
+    return next(new ErrorHandler("Order status changed; refresh and try again", 409));
   }
 
-  // Restore stock
-  for (const item of order.products) {
-    await Product.findByIdAndUpdate(item.product, {
-      $inc: {
-        stockQuantity: item.quantity,
-      },
-    });
-  }
+  res.status(200).json({
+    success: true,
+    message: "Order status updated successfully",
+    order: updatedOrder,
+  });
+});
 
-  order.orderStatus = "CANCELLED";
+// =====================================================
+// 8. ADMIN - CANCEL ORDER
+// =====================================================
 
-  await order.save();
+export const cancelOrderByAdmin = catchAsyncErrors(async (req, res, next) => {
+  const order = await cancelAndRestoreStock({ id: req.params.id });
 
   res.status(200).json({
     success: true,
@@ -460,42 +439,6 @@ export const cancelOrderByAdmin = catchAsyncErrors(async (req, res, next) => {
   });
 });
 
-// =====================================================
-// 9. MARK ORDER AS PAID
-// =====================================================
-// Use this after Razorpay/Stripe payment verification.
-// Do NOT call this directly from the frontend in production.
-
-export const markOrderAsPaid = catchAsyncErrors(async (req, res, next) => {
-  const { id } = req.params;
-  const { transactionId } = req.body;
-
-  const order = await Order.findById(id);
-
-  if (!order) {
-    return next(new ErrorHandler("Order not found", 404));
-  }
-
-  if (order.paymentInfo.paymentStatus === "PAID") {
-    return next(new ErrorHandler("Order is already paid", 400));
-  }
-
-  order.paymentInfo.paymentStatus = "PAID";
-
-  order.paymentInfo.transactionId = transactionId || null;
-
-  order.paidAt = new Date();
-
-  order.orderStatus = "CONFIRMED";
-
-  await order.save();
-
-  res.status(200).json({
-    success: true,
-    message: "Payment recorded successfully",
-    order,
-  });
-});
 // =====================================================
 // GET USER ORDER STATUS
 // =====================================================

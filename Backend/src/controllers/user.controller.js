@@ -11,7 +11,6 @@ import {
 
 import ErrorHandler from "../utils/handleError.js";
 import { catchAsyncErrors } from "../middlewares/catchAsyncErrors.js";
-import { success } from "zod";
 
 // ================= REGISTER =================
 
@@ -25,8 +24,6 @@ export const register = catchAsyncErrors(async (req, res, next) => {
   } = req.body;
 
   if (role === "admin") {
-    console.log("Expected:", process.env.ADMIN_SIGNUP_CODE);
-    console.log("Received:", adminInviteCode);
     const expectedCode = Buffer.from(process.env.ADMIN_SIGNUP_CODE || "");
     const submittedCode = Buffer.from(adminInviteCode || "");
 
@@ -166,6 +163,10 @@ export const profile = catchAsyncErrors(async (req, res) => {
 export const forgotPassword = catchAsyncErrors(async (req, res, next) => {
   const { email } = req.body;
 
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+    return next(new ErrorHandler("Password reset email is not configured", 503));
+  }
+
   const normalizedEmail = email.trim().toLowerCase();
 
   const user = await User.findOne({
@@ -190,8 +191,8 @@ export const forgotPassword = catchAsyncErrors(async (req, res, next) => {
   });
 
   // Frontend reset URL
-  const resetPasswordUrl = `http://localhost:5173/reset-password/${resetToken}`;
-  console.log(resetPasswordUrl);
+  const frontendUrl = (process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/$/, "");
+  const resetPasswordUrl = `${frontendUrl}/reset-password/${resetToken}`;
   const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto;">
 
@@ -398,17 +399,21 @@ export const updateProfile = catchAsyncErrors(async (req, res, next) => {
 });
 
 export const getUserList = catchAsyncErrors(async (req, res, next) => {
-  const users = await User.find();
+  const users = await User.find().select(
+    "fullname email role accountStatus createdAt",
+  );
   res.status(200).json({
     success: true,
     users,
   });
 });
 export const getSingleUser = catchAsyncErrors(async (req, res, next) => {
-  const user = await User.findById(req.params.id);
+  const user = await User.findById(req.params.id).select(
+    "fullname email role accountStatus createdAt",
+  );
   if (!user) {
     return next(
-      new ErrorHandler(`User doesn't exist with this id: ${req.param.id}`, 400),
+      new ErrorHandler(`User doesn't exist with this id: ${req.params.id}`, 400),
     );
   }
   res.status(200).json({
@@ -418,15 +423,14 @@ export const getSingleUser = catchAsyncErrors(async (req, res, next) => {
 });
 export const updateUserRole = catchAsyncErrors(async (req, res, next) => {
   const { role } = req.body;
+  if (!["user", "admin", "seller", "delivery_partner"].includes(role)) {
+    return next(new ErrorHandler("Invalid user role", 400));
+  }
 
-  const newUserData = {
-    role,
-  };
-
-  const user = await User.findByIdAndUpdate(req.params.id, newUserData, {
-    new: true,
+  const user = await User.findByIdAndUpdate(req.params.id, { role }, {
+    returnDocument: "after",
     runValidators: true,
-  });
+  }).select("fullname email role accountStatus createdAt");
 
   if (!user) {
     return next(new ErrorHandler("User doesn't exist", 400));
@@ -436,6 +440,25 @@ export const updateUserRole = catchAsyncErrors(async (req, res, next) => {
     success: true,
     user,
   });
+});
+
+export const updateUserStatus = catchAsyncErrors(async (req, res, next) => {
+  const { accountStatus } = req.body;
+  if (!["active", "blocked"].includes(accountStatus)) {
+    return next(new ErrorHandler("Invalid account status", 400));
+  }
+  if (String(req.params.id) === String(req.user._id)) {
+    return next(new ErrorHandler("You cannot change your own account status", 400));
+  }
+
+  const user = await User.findByIdAndUpdate(
+    req.params.id,
+    { accountStatus },
+    { returnDocument: "after", runValidators: true },
+  ).select("fullname email role accountStatus createdAt");
+  if (!user) return next(new ErrorHandler("User doesn't exist", 404));
+
+  res.status(200).json({ success: true, user });
 });
 export const deleteUser = catchAsyncErrors(async (req, res, next) => {
   const user = await User.findById(req.params.id);

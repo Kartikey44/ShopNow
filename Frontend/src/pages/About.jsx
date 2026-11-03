@@ -1,4 +1,3 @@
-import React from "react";
 import { Sparkles, ShieldCheck, Leaf, Heart } from "lucide-react";
 
 function About() {

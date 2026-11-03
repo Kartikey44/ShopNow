@@ -12,6 +12,7 @@ import {
   getUserList,
   getSingleUser,
   updateUserRole,
+  updateUserStatus,
   deleteUser,
 } from "../controllers/user.controller.js";
 
@@ -77,5 +78,11 @@ router.put(
   protectRoute,
   roleBasedAccess("admin"),
   updateUserRole,
+);
+router.put(
+  "/admin/user/:id/status",
+  protectRoute,
+  roleBasedAccess("admin"),
+  updateUserStatus,
 );
 export default router;

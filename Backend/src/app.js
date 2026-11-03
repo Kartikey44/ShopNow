@@ -12,6 +12,7 @@ import cartRouter from "./routers/cart.route.js";
 import errorMiddleware from "./middlewares/error.middleware.js";
 import addressRouter from "./routers/address.route.js";
 import paymentRouter from "./routers/payment.route.js";
+import adminRouter from "./routers/admin.route.js";
 
 export const app = express();
 
@@ -35,6 +36,7 @@ app.use("/api/cart", cartRouter);
 app.use("/api/addresses", addressRouter);
 app.use("/api/orders", orderRouter);
 app.use("/api/payment", paymentRouter);
+app.use("/api/admin", adminRouter);
 
 // Error Middleware
 app.use(errorMiddleware);

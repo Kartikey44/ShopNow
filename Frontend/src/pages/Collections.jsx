@@ -1,92 +1,142 @@
-import React from "react";
-import { Link } from "react-router-dom";
-import { ArrowRight } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import axiosInstance from "../api/axios";
+import ProductCard from "../components/ProductCard";
 
 function Collections() {
-  const collections = [
-    {
-      id: 1,
-      title: "Men",
-      subtitle: "Modern essentials",
-      image:
-        "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=1000",
-    },
-    {
-      id: 2,
-      title: "Women",
-      subtitle: "Timeless styles",
-      image:
-        "https://images.unsplash.com/photo-1483985988355-763728e1935b?w=1000",
-    },
-    {
-      id: 3,
-      title: "Accessories",
-      subtitle: "Complete your look",
-      image:
-        "https://images.unsplash.com/photo-1523779917675-b6ed3a42a561?w=1000",
-    },
-  ];
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [filters, setFilters] = useState({
+    keyword: searchParams.get("keyword") || "",
+    category: searchParams.get("category") || "",
+    minPrice: searchParams.get("minPrice") || "",
+    maxPrice: searchParams.get("maxPrice") || "",
+    sort: searchParams.get("sort") || "-createdAt",
+  });
+
+  useEffect(() => {
+    let active = true;
+    axiosInstance
+      .get("/categories")
+      .then(({ data }) => {
+        if (active) setCategories(data.categories || []);
+      })
+      .catch(() => {
+        if (active) setError("Categories could not be loaded.");
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const timer = window.setTimeout(async () => {
+      setLoading(true);
+      setError("");
+      const params = { page, limit: 12, sort: filters.sort };
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value) params[key] = value;
+      });
+      setSearchParams(
+        Object.fromEntries(
+          Object.entries(filters).filter(([, value]) => Boolean(value)),
+        ),
+        { replace: true },
+      );
+      try {
+        const { data } = await axiosInstance.get("/products", { params });
+        if (!active) return;
+        setProducts(data.products || []);
+        setTotalPages(Math.max(1, data.totalPages || 1));
+      } catch {
+        if (active) {
+          setProducts([]);
+          setError("Products could not be loaded. Check the API connection and try again.");
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    }, 250);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [filters, page, setSearchParams]);
+
+  const changeFilter = (event) => {
+    setPage(1);
+    setFilters((current) => ({ ...current, [event.target.name]: event.target.value }));
+  };
 
   return (
-    <div className="min-h-screen bg-[#06110d] text-white px-4 sm:px-6 lg:px-10 py-12">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-12">
-          <p className="text-emerald-400 text-xs uppercase tracking-[0.25em]">
-            Discover
-          </p>
+    <main className="min-h-screen bg-[#06110d] px-4 py-10 pb-24 text-white sm:px-6 lg:px-10">
+      <div className="mx-auto max-w-7xl">
+        <header className="mb-8">
+          <p className="text-xs uppercase tracking-[0.2em] text-emerald-400">ShopNow store</p>
+          <h1 className="mt-2 text-3xl font-semibold sm:text-4xl">Shop products</h1>
+          <p className="mt-2 text-sm text-gray-400">Search and filter live products from our catalog.</p>
+        </header>
 
-          <h1 className="text-4xl sm:text-5xl font-semibold mt-3">
-            Collections
-          </h1>
+        <section aria-label="Product filters" className="mb-8 grid gap-3 rounded-xl border border-emerald-900/50 bg-[#0b1914] p-4 sm:grid-cols-2 lg:grid-cols-5">
+          <label className="text-xs text-gray-400">
+            Search
+            <input className="checkout-input mt-2" name="keyword" onChange={changeFilter} placeholder="Product name" value={filters.keyword} />
+          </label>
+          <label className="text-xs text-gray-400">
+            Category
+            <select className="checkout-input mt-2" name="category" onChange={changeFilter} value={filters.category}>
+              <option value="">All categories</option>
+              {categories.map((category) => (
+                <option key={category._id} value={category._id}>{category.categoryName}</option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs text-gray-400">
+            Minimum price
+            <input className="checkout-input mt-2" min="0" name="minPrice" onChange={changeFilter} type="number" value={filters.minPrice} />
+          </label>
+          <label className="text-xs text-gray-400">
+            Maximum price
+            <input className="checkout-input mt-2" min="0" name="maxPrice" onChange={changeFilter} type="number" value={filters.maxPrice} />
+          </label>
+          <label className="text-xs text-gray-400">
+            Sort
+            <select className="checkout-input mt-2" name="sort" onChange={changeFilter} value={filters.sort}>
+              <option value="-createdAt">Newest</option>
+              <option value="originalPrice">Price: low to high</option>
+              <option value="-originalPrice">Price: high to low</option>
+              <option value="productName">Name</option>
+            </select>
+          </label>
+        </section>
 
-          <p className="text-gray-500 max-w-xl mx-auto mt-4">
-            Explore our latest collections, curated for every style and
-            occasion.
-          </p>
-        </div>
+        {error && <p className="mb-5 rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200" role="alert">{error}</p>}
+        {loading ? (
+          <p aria-live="polite" className="py-16 text-center text-gray-400">Loading products…</p>
+        ) : products.length === 0 ? (
+          <div className="rounded-xl border border-emerald-900/50 bg-[#0b1914] py-16 text-center">
+            <h2 className="text-xl font-medium">No products found</h2>
+            <p className="mt-2 text-sm text-gray-500">Try changing or clearing the filters.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-5 lg:grid-cols-4">
+            {products.map((product) => <ProductCard key={product._id} product={product} />)}
+          </div>
+        )}
 
-        {/* 3 Collections */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {collections.map((collection) => (
-            <Link
-              key={collection.id}
-              to="/collection"
-              className="group relative h-[500px] rounded-2xl overflow-hidden border border-emerald-900/40"
-            >
-              {/* Image */}
-              <img
-                src={collection.image}
-                alt={collection.title}
-                className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-              />
-
-              {/* Dark Overlay */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" />
-
-              {/* Content */}
-              <div className="absolute bottom-0 left-0 right-0 p-7">
-                <p className="text-emerald-400 text-xs uppercase tracking-[0.2em]">
-                  {collection.subtitle}
-                </p>
-
-                <h2 className="text-3xl font-semibold mt-2">
-                  {collection.title}
-                </h2>
-
-                <div className="flex items-center gap-2 mt-5 text-sm text-gray-300 group-hover:text-emerald-400 transition">
-                  Explore Collection
-                  <ArrowRight
-                    size={17}
-                    className="transition-transform group-hover:translate-x-1"
-                  />
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
+        <nav aria-label="Product pages" className="mt-8 flex items-center justify-center gap-5">
+          <button className="rounded-lg border border-emerald-800 px-4 py-2 disabled:opacity-40" disabled={page <= 1 || loading} onClick={() => setPage((current) => current - 1)} type="button">Previous</button>
+          <span className="text-sm text-gray-400">Page {page} of {totalPages}</span>
+          <button className="rounded-lg border border-emerald-800 px-4 py-2 disabled:opacity-40" disabled={page >= totalPages || loading} onClick={() => setPage((current) => current + 1)} type="button">Next</button>
+        </nav>
       </div>
-    </div>
+    </main>
   );
 }
 
