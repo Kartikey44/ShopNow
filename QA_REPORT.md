@@ -11,7 +11,7 @@ The backend connected to MongoDB at `127.0.0.1`; its API returned successful pro
 | Check | Result |
 |---|---|
 | MongoDB connection | Backend startup logged `MongoDB Connected: 127.0.0.1`; local category and product API requests returned HTTP 200. |
-| Backend automated tests | `npm --prefix Backend test` — 5 passed, 0 failed. |
+| Backend automated tests | `npm --prefix Backend test` — 6 passed, 0 failed. |
 | Frontend lint | `npm --prefix Frontend run lint` — passed. |
 | Frontend production build | `npm --prefix Frontend run build` — passed. |
 | Backend JavaScript syntax | `node --check` passed for all 45 backend source/test JavaScript files. |
@@ -22,6 +22,7 @@ The backend connected to MongoDB at `127.0.0.1`; its API returned successful pro
 ## APIs implemented and exercised
 
 - **Authentication and users:** register, login, logout, profile, profile update, password update, forgot-password configuration response, invalid reset token, admin user list/detail/role/status/delete. Invalid credentials, role authorization, and blocked-account behavior were checked.
+- Admin registration without an invitation code was re-verified against the live API without `ADMIN_SIGNUP_CODE` configured (HTTP 201, role `admin`).
 - **Products and reviews:** product list with search/category/price/sort/page parameters, product detail by MongoDB ID, admin list/create/edit/delete, review create/list/delete, duplicate review rejection, invalid price range, malformed IDs, and stock validation.
 - **Categories:** public list/detail, admin create/PATCH/delete, malformed ID handling, and refusal to delete a category referenced by a product.
 - **Cart:** persisted read/add/quantity update/remove/clear, server-calculated prices, invalid quantity, and insufficient-stock rejection.
@@ -50,7 +51,7 @@ The route catalog and request shapes are documented in [API.md](API.md).
 ## Bugs fixed
 
 - Corrected category lookup/PATCH behavior and user lookup to use the proper request parameters; added input validation and category-in-use deletion protection.
-- Removed admin invitation-code logging and password-reset token URL logging.
+- Removed admin invitation-code handling and password-reset token URL logging.
 - Added Cloudinary configuration checks so image upload or remote deletion fails explicitly with HTTP 503 when credentials are absent; seed placeholder images remain local-only.
 - Added forgot/reset-password pages for existing login links, routed reset emails through `FRONTEND_URL`, and made missing SMTP configuration return HTTP 503 instead of a generic mail failure.
 - Reworked order cancellation/status updates to use conditional status transitions, transactional stock restoration where supported, and rollback compensation on standalone MongoDB. Admin status-based cancellation now follows the same cancellation guards.
@@ -63,6 +64,7 @@ The route catalog and request shapes are documented in [API.md](API.md).
 - **Cloudinary:** no credentials were configured. Upload, remote replacement, and remote deletion remain unavailable and were not claimed as working.
 - **Razorpay:** no credentials were configured. Live order creation/signature verification against Razorpay were not performed; the local checkout options are COD and demo-only `MOCK`.
 - **Email/SMTP:** no credentials were configured. The forgot-password UI/API correctly reports that reset email is unavailable; a delivered email and successful token-based reset were not tested.
+- **Admin signup:** admin registration is intentionally available without an invitation code, per the requested behavior. Restrict public signup or role selection at deployment if unrestricted admin creation is not appropriate.
 - **MongoDB transaction topology:** order and cancellation flows passed against the available local MongoDB. A replica-set/sharded deployment was not available, so the transaction-enabled path was not independently exercised.
 - **Browser coverage:** only the Browser canvas at 628 × 732 was inspected; desktop browsers/devices were not covered. The canvas could not connect to port 5000, so browser integration used the QA backend on port 5002. Port 5000 was separately started and probed from PowerShell.
 - **Dependency advisories:** the prior dependency audit reported 10 Backend and 17 Frontend advisories; they were not remediated in this QA scope. Re-run `npm audit` and review/upgrade them before production deployment.
@@ -78,7 +80,7 @@ In PowerShell, configure the backend first (copy the example only if `Backend/.e
 Set-Location Backend
 Copy-Item .env.example .env
 # Set MONGO_URI, distinct JWT_ACCESS_SECRET/JWT_REFRESH_SECRET values,
-# FRONTEND_URL, and a private ADMIN_SIGNUP_CODE in .env.
+# FRONTEND_URL in .env.
 npm install
 npm run dev
 ```

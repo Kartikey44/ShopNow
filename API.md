@@ -6,7 +6,7 @@ The API base URL is `http://localhost:5000/api` in local development. JSON reque
 
 | Method | Path | Access | Purpose |
 |---|---|---|---|
-| POST | `/auth/register` | Public | Register customer; an admin registration additionally requires `role: "admin"` and a valid `adminInviteCode` |
+| POST | `/auth/register` | Public | Register a customer or admin account; set `role: "admin"` for an admin account |
 | POST | `/auth/login` | Public | Authenticate and set cookies |
 | POST | `/auth/logout` | Authenticated | Clear authentication cookies |
 | GET | `/auth/profile` | Authenticated | Current user |

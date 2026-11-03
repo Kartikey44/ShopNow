@@ -1,5 +1,4 @@
 import User from "../schemas/user.schema.js";
-import crypto from "crypto";
 import { sendEmail } from "../services/email.service.js";
 import {
   generateAuthTokens,
@@ -15,29 +14,7 @@ import { catchAsyncErrors } from "../middlewares/catchAsyncErrors.js";
 // ================= REGISTER =================
 
 export const register = catchAsyncErrors(async (req, res, next) => {
-  const {
-    fullname,
-    email,
-    password,
-    role = "user",
-    adminInviteCode,
-  } = req.body;
-
-  if (role === "admin") {
-    const expectedCode = Buffer.from(process.env.ADMIN_SIGNUP_CODE || "");
-    const submittedCode = Buffer.from(adminInviteCode || "");
-
-    const isValidAdminCode =
-      expectedCode.length > 0 &&
-      submittedCode.length === expectedCode.length &&
-      crypto.timingSafeEqual(submittedCode, expectedCode);
-
-    if (!isValidAdminCode) {
-      return next(
-        new ErrorHandler("A valid admin invitation code is required", 403),
-      );
-    }
-  }
+  const { fullname, email, password, role = "user" } = req.body;
 
   const normalizedEmail = email.trim().toLowerCase();
 

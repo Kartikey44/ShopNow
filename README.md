@@ -20,7 +20,7 @@ ShopNow is a React/Vite storefront and an Express/MongoDB API. The storefront su
    npm run dev
    ```
 
-   Edit `Backend/.env` with a private MongoDB URI, distinct random `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` values, and a private `ADMIN_SIGNUP_CODE`. Set `FRONTEND_URL=http://localhost:5173` for the default Vite server. Do not commit `.env`.
+   Edit `Backend/.env` with a private MongoDB URI and distinct random `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` values. Set `FRONTEND_URL=http://localhost:5173` for the default Vite server. Do not commit `.env`.
 3. In a second PowerShell terminal:
 
    ```powershell
@@ -30,7 +30,7 @@ ShopNow is a React/Vite storefront and an Express/MongoDB API. The storefront su
    npm run dev
    ```
 
-4. Open the Vite URL printed in the frontend terminal (normally `http://localhost:5173`). Register a customer account in the app. Admin registration is gated by the invitation code configured in `Backend/.env`; choose the admin role only for an authorized operator.
+4. Open the Vite URL printed in the frontend terminal (normally `http://localhost:5173`) and register an account. Admin registration is available by selecting the admin role; only grant admin access to trusted operators.
 5. To populate an empty store, sign in as an admin, then in another terminal run:
 
    ```powershell
