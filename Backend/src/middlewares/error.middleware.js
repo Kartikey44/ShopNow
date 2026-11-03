@@ -2,6 +2,10 @@ const errorMiddleware = (err, req, res, next) => {
   err.statusCode = err.statusCode || 500;
   err.message = err.message || "Internal Server Error";
 
+  if (err.name === "MulterError" || err.message?.startsWith("Only JPEG")) {
+    err.statusCode = 400;
+  }
+
   if (err.name === "CastError") {
     err.statusCode = 400;
     err.message = `Resource not found. Invalid ${err.path}`;

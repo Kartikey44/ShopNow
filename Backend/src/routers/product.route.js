@@ -16,6 +16,7 @@ import {
   protectRoute,
   roleBasedAccess,
 } from "../middlewares/validate.middleware.js";
+import upload from "../middlewares/upload.middleware.js";
 
 const router = Router();
 
@@ -32,7 +33,7 @@ router
 // Create product
 router
   .route("/admin/product/create")
-  .post(protectRoute, roleBasedAccess("admin"), createProduct);
+  .post(protectRoute, roleBasedAccess("admin"), upload.array("images", 5), createProduct);
 
 // Public product and review reads
 router.route("/:id/reviews").get(getProductReviews);
@@ -42,7 +43,7 @@ router.route("/:id").get(getProductById);
 // Update/Delete product
 router
   .route("/admin/product/:id")
-  .put(protectRoute, roleBasedAccess("admin"), updateProduct)
+  .put(protectRoute, roleBasedAccess("admin"), upload.array("images", 5), updateProduct)
   .delete(protectRoute, roleBasedAccess("admin"), deleteProduct);
 
 // ==================== REVIEWS ====================

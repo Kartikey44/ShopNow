@@ -10,7 +10,6 @@ import {
   getAdminOrderById,
   updateOrderStatus,
   cancelOrderByAdmin,
-  markOrderAsPaid,
 } from "../controllers/order.controller.js";
 
 import {
@@ -48,8 +47,6 @@ router.route("/").post(createOrder).get(getOrders);
 router.route("/:id").get(getOrderById);
 
 router.route("/:id/cancel").put(cancelOrder);
-
-router.route("/:id/pay").put(markOrderAsPaid);
 
 router.route("/:id/status").get(getOrderStatus);
 

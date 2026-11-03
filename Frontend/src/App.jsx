@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { Routes, Route, Outlet } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 import Home from "./pages/Home";
 import About from "./pages/About";
@@ -12,6 +14,8 @@ import Cart from "./pages/Cart";
 import Collections from "./pages/Collections";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import NotFound from "./pages/NotFound";
 
@@ -19,7 +23,8 @@ import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import RoleRoute from "./components/RoleRoute";
 
-import { loadCurrentUser, selectAuthStatus } from "./features/auth/authSlice";
+import { loadCurrentUser, selectAuthStatus, selectCurrentUser } from "./features/auth/authSlice";
+import { clearCartState, loadCart } from "./features/cart/cartSlice";
 
 /* ================= PUBLIC LAYOUT ================= */
 
@@ -52,10 +57,16 @@ function StandaloneLayout() {
 function App() {
   const dispatch = useDispatch();
   const authStatus = useSelector(selectAuthStatus);
+  const user = useSelector(selectCurrentUser);
 
   useEffect(() => {
     dispatch(loadCurrentUser());
   }, [dispatch]);
+
+  useEffect(() => {
+    if (user?.role === "user") dispatch(loadCart());
+    else if (authStatus !== "checking" && !user) dispatch(clearCartState());
+  }, [authStatus, dispatch, user]);
 
   /*
    * Wait for the initial authentication check.
@@ -71,6 +82,8 @@ function App() {
   }
 
   return (
+    <>
+    <ToastContainer autoClose={3000} position="top-right" theme="dark" />
     <Routes>
       {/* ================= PUBLIC ROUTES ================= */}
 
@@ -92,6 +105,10 @@ function App() {
         <Route path="/login" element={<Login />} />
 
         <Route path="/signup" element={<Signup />} />
+
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+
+        <Route path="/reset-password/:token" element={<ResetPassword />} />
       </Route>
 
       {/* ================= USER PROTECTED ROUTES ================= */}
@@ -120,6 +137,7 @@ function App() {
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
+    </>
   );
 }
 

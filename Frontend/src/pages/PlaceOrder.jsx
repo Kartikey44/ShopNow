@@ -1,365 +1,129 @@
 import { useState } from "react";
-import {
-  MapPin,
-  CreditCard,
-  Banknote,
-  ShieldCheck,
-  ArrowLeft,
-  Check,
-} from "lucide-react";
-import { Link } from "react-router-dom";
-import { useSelector } from "react-redux";
-import {
-  selectCartItems,
-  selectCartSubtotal,
-} from "../features/cart/cartSlice";
+import { useNavigate, Link } from "react-router-dom";
+import { MapPin, CreditCard, Banknote, ShieldCheck } from "lucide-react";
+import { useDispatch, useSelector } from "react-redux";
+import axiosInstance from "../api/axios";
+import { emptyCart, selectCartItems, selectCartSubtotal } from "../features/cart/cartSlice";
+
+const initialAddress = {
+  fullname: "",
+  mobile: "",
+  houseNo: "",
+  street: "",
+  city: "",
+  state: "",
+  pincode: "",
+};
 
 function PlaceOrder() {
-  const [paymentMethod, setPaymentMethod] = useState("COD");
-  const orderItems = useSelector(selectCartItems);
+  const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const items = useSelector(selectCartItems);
   const subtotal = useSelector(selectCartSubtotal);
+  const [address, setAddress] = useState(initialAddress);
+  const [paymentMethod, setPaymentMethod] = useState("COD");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
-  const [address, setAddress] = useState({
-    fullname: "",
-    mobile: "",
-    houseNo: "",
-    street: "",
-    city: "",
-    state: "",
-    pincode: "",
-  });
-
-  const handleChange = (e) => {
-    setAddress({
-      ...address,
-      [e.target.name]: e.target.value,
-    });
+  const updateAddress = (event) => {
+    setAddress((current) => ({ ...current, [event.target.name]: event.target.value }));
   };
 
-  const discount = 0;
-  const shipping = subtotal === 0 || subtotal >= 3000 ? 0 : 99;
-  const total = subtotal - discount + shipping;
+  const placeOrder = async (event) => {
+    event.preventDefault();
+    setError("");
+    setSubmitting(true);
+    try {
+      const { data: addressData } = await axiosInstance.post("/addresses", {
+        ...address,
+        country: "India",
+        addressType: "home",
+        isDefault: true,
+      });
+      await axiosInstance.post("/orders", {
+        shippingAddress: addressData.address._id,
+        paymentMethod,
+      });
+      await dispatch(emptyCart()).unwrap();
+      navigate("/order", { replace: true });
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || requestError.message || "Unable to place your order.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-[#06110d] text-white">
-      {/* Header */}
+    <main className="min-h-screen bg-[#06110d] px-4 pb-24 text-white sm:px-6 lg:px-10">
       <header className="border-b border-emerald-900/40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 h-20 flex items-center justify-between">
-          <Link
-            to="/cart"
-            className="flex items-center gap-2 text-sm text-gray-400 hover:text-emerald-400 transition"
-          >
-            <ArrowLeft size={17} />
-            Back to Cart
-          </Link>
-
-          <div className="flex items-center gap-2 text-emerald-400">
-            <ShieldCheck size={19} />
-            <span className="text-xs sm:text-sm">Secure Checkout</span>
-          </div>
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between">
+          <Link className="text-sm text-gray-400 hover:text-emerald-400" to="/cart">← Back to cart</Link>
+          <span className="flex items-center gap-2 text-sm text-emerald-400"><ShieldCheck size={18} /> Secure checkout</span>
         </div>
       </header>
-
-      {/* Main */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 py-10">
-        {/* Heading */}
-        <div className="mb-10">
-          <p className="text-emerald-400 text-xs uppercase tracking-[0.2em] mb-2">
-            Checkout
-          </p>
-
-          <h1 className="text-3xl sm:text-4xl font-semibold">
-            Complete Your Order
-          </h1>
-
-          <p className="text-gray-500 mt-2">
-            Enter your delivery details and choose a payment method.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_390px] gap-8">
-          {/* LEFT SIDE */}
-          <div className="space-y-6">
-            {/* Delivery Address */}
-            <section className="bg-[#0b1914] border border-emerald-900/50 rounded-2xl p-6 sm:p-8">
-              <div className="flex items-center gap-3 mb-7">
-                <div className="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                  <MapPin size={19} className="text-emerald-400" />
-                </div>
-
-                <div>
-                  <h2 className="text-lg font-semibold">Delivery Address</h2>
-
-                  <p className="text-xs text-gray-500 mt-1">
-                    Where should we deliver your order?
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                {/* Full Name */}
-                <div className="sm:col-span-2">
-                  <label className="checkout-label">Full Name</label>
-
-                  <input
-                    type="text"
-                    name="fullname"
-                    value={address.fullname}
-                    onChange={handleChange}
-                    placeholder="Enter your full name"
-                    className="checkout-input"
-                  />
-                </div>
-
-                {/* Mobile */}
-                <div>
-                  <label className="checkout-label">Mobile Number</label>
-
-                  <input
-                    type="tel"
-                    name="mobile"
-                    value={address.mobile}
-                    onChange={handleChange}
-                    placeholder="+91 98765 43210"
-                    className="checkout-input"
-                  />
-                </div>
-
-                {/* Pincode */}
-                <div>
-                  <label className="checkout-label">Pincode</label>
-
-                  <input
-                    type="text"
-                    name="pincode"
-                    value={address.pincode}
-                    onChange={handleChange}
-                    placeholder="201301"
-                    className="checkout-input"
-                  />
-                </div>
-
-                {/* House */}
-                <div>
-                  <label className="checkout-label">House / Flat No.</label>
-
-                  <input
-                    type="text"
-                    name="houseNo"
-                    value={address.houseNo}
-                    onChange={handleChange}
-                    placeholder="House no. / Flat no."
-                    className="checkout-input"
-                  />
-                </div>
-
-                {/* Street */}
-                <div>
-                  <label className="checkout-label">Street / Area</label>
-
-                  <input
-                    type="text"
-                    name="street"
-                    value={address.street}
-                    onChange={handleChange}
-                    placeholder="Street / Locality"
-                    className="checkout-input"
-                  />
-                </div>
-
-                {/* City */}
-                <div>
-                  <label className="checkout-label">City</label>
-
-                  <input
-                    type="text"
-                    name="city"
-                    value={address.city}
-                    onChange={handleChange}
-                    placeholder="City"
-                    className="checkout-input"
-                  />
-                </div>
-
-                {/* State */}
-                <div>
-                  <label className="checkout-label">State</label>
-
-                  <input
-                    type="text"
-                    name="state"
-                    value={address.state}
-                    onChange={handleChange}
-                    placeholder="State"
-                    className="checkout-input"
-                  />
-                </div>
-              </div>
-            </section>
-
-            {/* Payment Method */}
-            <section className="bg-[#0b1914] border border-emerald-900/50 rounded-2xl p-6 sm:p-8">
-              <div className="flex items-center gap-3 mb-7">
-                <div className="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                  <CreditCard size={19} className="text-emerald-400" />
-                </div>
-
-                <div>
-                  <h2 className="text-lg font-semibold">Payment Method</h2>
-
-                  <p className="text-xs text-gray-500 mt-1">
-                    Choose how you want to pay
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                {/* COD */}
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod("COD")}
-                  className={`w-full p-4 rounded-xl border flex items-center justify-between text-left transition ${
-                    paymentMethod === "COD"
-                      ? "border-emerald-500 bg-emerald-500/5"
-                      : "border-emerald-900/50 hover:border-emerald-700"
-                  }`}
-                >
-                  <div className="flex items-center gap-4">
-                    <Banknote size={21} className="text-emerald-400" />
-
-                    <div>
-                      <p className="text-sm font-medium">Cash on Delivery</p>
-
-                      <p className="text-xs text-gray-500 mt-1">
-                        Pay when your order arrives
-                      </p>
-                    </div>
-                  </div>
-
-                  {paymentMethod === "COD" && (
-                    <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center">
-                      <Check size={14} className="text-[#03100a]" />
-                    </div>
-                  )}
-                </button>
-
-                {/* Razorpay */}
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod("RAZORPAY")}
-                  className={`w-full p-4 rounded-xl border flex items-center justify-between text-left transition ${
-                    paymentMethod === "RAZORPAY"
-                      ? "border-emerald-500 bg-emerald-500/5"
-                      : "border-emerald-900/50 hover:border-emerald-700"
-                  }`}
-                >
-                  <div className="flex items-center gap-4">
-                    <CreditCard size={21} className="text-emerald-400" />
-
-                    <div>
-                      <p className="text-sm font-medium">Online Payment</p>
-
-                      <p className="text-xs text-gray-500 mt-1">
-                        Card, UPI, Net Banking & more
-                      </p>
-                    </div>
-                  </div>
-
-                  {paymentMethod === "RAZORPAY" && (
-                    <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center">
-                      <Check size={14} className="text-[#03100a]" />
-                    </div>
-                  )}
-                </button>
-              </div>
-            </section>
+      <div className="mx-auto max-w-7xl py-10">
+        <p className="text-xs uppercase tracking-[0.2em] text-emerald-400">Checkout</p>
+        <h1 className="mt-2 text-3xl font-semibold sm:text-4xl">Complete your order</h1>
+        {items.length === 0 ? (
+          <div className="mt-8 rounded-xl border border-emerald-900/50 bg-[#0b1914] p-8 text-center">
+            <p>Your cart is empty.</p><Link className="mt-4 inline-block text-emerald-400" to="/collection">Shop products</Link>
           </div>
-
-          {/* RIGHT SIDE */}
-          <aside className="lg:sticky lg:top-8 h-fit">
-            <div className="bg-[#0b1914] border border-emerald-900/50 rounded-2xl p-6 sm:p-7">
-              <h2 className="text-xl font-semibold mb-6">Order Summary</h2>
-
-              {/* Products */}
-              <div className="space-y-4">
-                {orderItems.map((item) => (
-                  <div key={item.cartItemId} className="flex gap-3">
-                    <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-[#07130f] shrink-0">
-                      <img
-                        src={item.image}
-                        alt={item.name}
-                        className="w-full h-full object-cover"
-                      />
-
-                      <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-emerald-500 text-[#03100a] text-[10px] font-bold flex items-center justify-center">
-                        {item.quantity}
-                      </span>
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">
-                        {item.name}
-                      </p>
-
-                      <p className="text-xs text-gray-600 mt-1">
-                        {item.color} · {item.size}
-                      </p>
-                    </div>
-
-                    <p className="text-sm text-gray-300">
-                      ₹{(item.price * item.quantity).toLocaleString("en-IN")}
-                    </p>
+        ) : (
+          <form className="mt-8 grid gap-8 lg:grid-cols-[1fr_390px]" onSubmit={placeOrder}>
+            <div className="space-y-6">
+              <section className="rounded-2xl border border-emerald-900/50 bg-[#0b1914] p-6 sm:p-8">
+                <h2 className="mb-6 flex items-center gap-3 text-xl font-semibold"><MapPin className="text-emerald-400" />Delivery address</h2>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {[
+                    ["fullname", "Full name", "text"],
+                    ["mobile", "Mobile number", "tel"],
+                    ["pincode", "Pincode", "text"],
+                    ["houseNo", "House / flat", "text"],
+                    ["street", "Street / area", "text"],
+                    ["city", "City", "text"],
+                    ["state", "State", "text"],
+                  ].map(([name, label, type]) => (
+                    <label className={`${name === "fullname" ? "sm:col-span-2" : ""} text-sm text-gray-300`} key={name}>
+                      {label}
+                      <input autoComplete={name === "fullname" ? "name" : name === "mobile" ? "tel" : "off"} className="checkout-input mt-2" name={name} onChange={updateAddress} required value={address[name]} type={type} />
+                    </label>
+                  ))}
+                </div>
+              </section>
+              <section className="rounded-2xl border border-emerald-900/50 bg-[#0b1914] p-6 sm:p-8">
+                <h2 className="mb-5 flex items-center gap-3 text-xl font-semibold"><CreditCard className="text-emerald-400" />Payment method</h2>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {[
+                    { value: "COD", label: "Cash on delivery", detail: "Pay when your order arrives", icon: Banknote },
+                    { value: "MOCK", label: "Demo online payment", detail: "Test-only payment; no charge is made", icon: CreditCard },
+                  ].map(({ value, label, detail, icon: Icon }) => (
+                    <label className={`flex cursor-pointer gap-3 rounded-xl border p-4 ${paymentMethod === value ? "border-emerald-500 bg-emerald-500/5" : "border-emerald-900/50"}`} key={value}>
+                      <input checked={paymentMethod === value} name="paymentMethod" onChange={() => setPaymentMethod(value)} type="radio" value={value} />
+                      <span><span className="flex items-center gap-2 font-medium"><Icon size={18} className="text-emerald-400" />{label}</span><span className="mt-1 block text-xs text-gray-400">{detail}</span></span>
+                    </label>
+                  ))}
+                </div>
+              </section>
+            </div>
+            <aside className="h-fit rounded-2xl border border-emerald-900/50 bg-[#0b1914] p-6 lg:sticky lg:top-8">
+              <h2 className="text-xl font-semibold">Order summary</h2>
+              <div className="mt-5 space-y-3">
+                {items.map((item) => (
+                  <div className="flex justify-between gap-3 text-sm" key={item.product?._id}>
+                    <span className="min-w-0 truncate text-gray-300">{item.product?.productName} × {item.quantity}</span>
+                    <span>₹{(item.price * item.quantity).toLocaleString("en-IN")}</span>
                   </div>
                 ))}
               </div>
-
-              <div className="h-px bg-emerald-900/50 my-6" />
-
-              {/* Pricing */}
-              <div className="space-y-4 text-sm">
-                <div className="flex justify-between text-gray-400">
-                  <span>Subtotal</span>
-                  <span>₹{subtotal.toLocaleString("en-IN")}</span>
-                </div>
-
-                <div className="flex justify-between text-gray-400">
-                  <span>Shipping</span>
-                  <span>{shipping === 0 ? "FREE" : `₹${shipping}`}</span>
-                </div>
-
-                <div className="flex justify-between text-emerald-400">
-                  <span>Discount</span>
-                  <span>- ₹{discount.toLocaleString("en-IN")}</span>
-                </div>
-              </div>
-
-              <div className="h-px bg-emerald-900/50 my-6" />
-
-              <div className="flex items-center justify-between">
-                <span className="font-medium">Total</span>
-
-                <span className="text-2xl font-semibold text-emerald-400">
-                  ₹{total.toLocaleString("en-IN")}
-                </span>
-              </div>
-
-              {/* Place Order */}
-              <button
-                type="button"
-                className="w-full h-13 mt-7 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-[#03100a] font-semibold transition-all hover:shadow-lg hover:shadow-emerald-500/20"
-              >
-                Place Order
-              </button>
-
-              <div className="flex items-center justify-center gap-2 text-xs text-gray-600 mt-5">
-                <ShieldCheck size={14} />
-                Secure & encrypted checkout
-              </div>
-            </div>
-          </aside>
-        </div>
-      </main>
-    </div>
+              <p className="mt-5 flex justify-between border-t border-emerald-900/50 pt-4 text-sm text-gray-400"><span>Subtotal (server cart)</span><span>₹{subtotal.toLocaleString("en-IN")}</span></p>
+              {error && <p className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200" role="alert">{error}</p>}
+              <button className="mt-6 h-12 w-full rounded-lg bg-emerald-500 font-semibold text-[#03100a] disabled:opacity-50" disabled={submitting} type="submit">{submitting ? "Placing order…" : "Place order"}</button>
+              <p className="mt-3 text-center text-xs text-gray-500">Tax, shipping, price, and inventory are calculated by the server.</p>
+            </aside>
+          </form>
+        )}
+      </div>
+    </main>
   );
 }
 

@@ -1,172 +1,124 @@
-import React from "react";
-import {
-  Package,
-  Truck,
-  CheckCircle2,
-  Clock3,
-  ChevronRight,
-} from "lucide-react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { Package, Truck, CheckCircle2, Clock3 } from "lucide-react";
+import axiosInstance from "../api/axios";
+
+const statusIcon = {
+  DELIVERED: CheckCircle2,
+  SHIPPED: Truck,
+  PACKED: Package,
+  CONFIRMED: CheckCircle2,
+  PENDING: Clock3,
+};
 
 function Orders() {
-  const orders = [
-    {
-      id: "ORD-2026-00124",
-      date: "28 Sep 2026",
-      status: "Delivered",
-      total: 3298,
-      items: [
-        {
-          name: "Premium Oversized T-Shirt",
-          size: "L",
-          quantity: 1,
-          image:
-            "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=300",
-        },
-        {
-          name: "Classic Cotton Hoodie",
-          size: "M",
-          quantity: 1,
-          image:
-            "https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=300",
-        },
-      ],
-    },
-    {
-      id: "ORD-2026-00118",
-      date: "21 Sep 2026",
-      status: "Shipped",
-      total: 1799,
-      items: [
-        {
-          name: "Essential Casual Shirt",
-          size: "M",
-          quantity: 1,
-          image:
-            "https://images.unsplash.com/photo-1603252110481-7ba873bf42ab?w=300",
-        },
-      ],
-    },
-  ];
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [busyOrder, setBusyOrder] = useState("");
+  const [expandedOrder, setExpandedOrder] = useState("");
 
-  const statusIcon = {
-    Delivered: <CheckCircle2 size={18} />,
-    Shipped: <Truck size={18} />,
-    Processing: <Clock3 size={18} />,
+  const loadOrders = async () => {
+    try {
+      const { data } = await axiosInstance.get("/orders");
+      setOrders(data.orders || []);
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || "Order history could not be loaded.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    let active = true;
+    const fetchOrders = async () => {
+      try {
+        const { data } = await axiosInstance.get("/orders");
+        if (active) setOrders(data.orders || []);
+      } catch (requestError) {
+        if (active) {
+          setError(requestError.response?.data?.message || "Order history could not be loaded.");
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    fetchOrders();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const cancelOrder = async (orderId) => {
+    setBusyOrder(orderId);
+    setError("");
+    try {
+      await axiosInstance.put(`/orders/${orderId}/cancel`);
+      await loadOrders();
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || "Order could not be cancelled.");
+    } finally {
+      setBusyOrder("");
+    }
   };
 
   return (
-    <div className="min-h-screen bg-[#06110d] text-white px-4 sm:px-6 lg:px-10 py-10">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-10">
-          <p className="text-emerald-400 text-xs uppercase tracking-[0.2em] mb-2">
-            Your Account
-          </p>
-
-          <h1 className="text-3xl sm:text-4xl font-semibold">My Orders</h1>
-
-          <p className="text-gray-500 mt-2">
-            Track and manage your previous purchases.
-          </p>
-        </div>
-
-        {/* Orders */}
-        <div className="space-y-5">
-          {orders.map((order) => (
-            <div
-              key={order.id}
-              className="bg-[#0b1914] border border-emerald-900/50 rounded-2xl overflow-hidden"
-            >
-              {/* Order Header */}
-              <div className="p-5 sm:p-6 border-b border-emerald-900/40 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <div className="w-11 h-11 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-                    <Package size={20} className="text-emerald-400" />
-                  </div>
-
-                  <div>
-                    <p className="font-medium">{order.id}</p>
-
-                    <p className="text-xs text-gray-500 mt-1">
-                      Placed on {order.date}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between sm:justify-end gap-5">
-                  <span
-                    className={`flex items-center gap-2 text-sm ${
-                      order.status === "Delivered"
-                        ? "text-emerald-400"
-                        : "text-yellow-400"
-                    }`}
-                  >
-                    {statusIcon[order.status]}
-                    {order.status}
-                  </span>
-
-                  <span className="font-semibold">
-                    ₹{order.total.toLocaleString("en-IN")}
-                  </span>
-                </div>
-              </div>
-
-              {/* Items */}
-              <div className="p-5 sm:p-6 space-y-4">
-                {order.items.map((item) => (
-                  <div key={item.name} className="flex items-center gap-4">
-                    <div className="w-16 h-16 rounded-lg overflow-hidden bg-[#07130f] shrink-0">
-                      <img
-                        src={item.image}
-                        alt={item.name}
-                        className="w-full h-full object-cover"
-                      />
+    <main className="min-h-screen bg-[#06110d] px-4 py-10 pb-24 text-white sm:px-6 lg:px-10">
+      <div className="mx-auto max-w-6xl">
+        <p className="text-xs uppercase tracking-[0.2em] text-emerald-400">Your account</p>
+        <h1 className="mt-2 text-3xl font-semibold sm:text-4xl">My orders</h1>
+        <p className="mt-2 text-gray-400">Order history from your ShopNow account.</p>
+        {error && <p className="mt-5 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200" role="alert">{error}</p>}
+        {loading ? <p aria-live="polite" className="py-16 text-center text-gray-400">Loading orders…</p> : orders.length === 0 ? (
+          <div className="mt-8 rounded-2xl border border-emerald-900/50 bg-[#0b1914] py-16 text-center">
+            <Package className="mx-auto text-emerald-500/60" size={40} />
+            <h2 className="mt-4 text-xl font-medium">No orders yet</h2>
+            <Link className="mt-5 inline-block rounded-lg bg-emerald-500 px-5 py-3 font-semibold text-[#03100a]" to="/collection">Start shopping</Link>
+          </div>
+        ) : (
+          <div className="mt-8 space-y-5">
+            {orders.map((order) => {
+              const StatusIcon = statusIcon[order.orderStatus] || Clock3;
+              const isOpen = expandedOrder === order._id;
+              return (
+                <article className="overflow-hidden rounded-2xl border border-emerald-900/50 bg-[#0b1914]" key={order._id}>
+                  <div className="flex flex-col gap-4 border-b border-emerald-900/40 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+                    <div className="flex items-center gap-3">
+                      <Package className="text-emerald-400" />
+                      <div><p className="font-medium">Order {order._id}</p><p className="mt-1 text-xs text-gray-500">{new Date(order.createdAt).toLocaleString()}</p></div>
                     </div>
-
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">
-                        {item.name}
-                      </p>
-
-                      <p className="text-xs text-gray-500 mt-1">
-                        Size {item.size} · Qty {item.quantity}
-                      </p>
+                    <div className="flex flex-wrap items-center justify-between gap-4 sm:justify-end">
+                      <span className="flex items-center gap-2 text-sm text-emerald-300"><StatusIcon size={17} />{order.orderStatus}</span>
+                      <span className="font-semibold">₹{Number(order.grandTotal).toLocaleString("en-IN")}</span>
                     </div>
                   </div>
-                ))}
-              </div>
-
-              {/* Footer */}
-              <div className="px-5 sm:px-6 py-4 border-t border-emerald-900/40 flex justify-end">
-                <button className="flex items-center gap-1 text-sm text-emerald-400 hover:text-emerald-300 transition">
-                  View Order
-                  <ChevronRight size={16} />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Empty State */}
-        {orders.length === 0 && (
-          <div className="text-center py-24">
-            <Package size={40} className="mx-auto text-emerald-500/50" />
-
-            <h2 className="text-xl font-medium mt-5">No orders yet</h2>
-
-            <p className="text-gray-500 mt-2">Your orders will appear here.</p>
-
-            <Link
-              to="/collection"
-              className="inline-flex mt-6 px-6 py-3 rounded-lg bg-emerald-500 text-[#03100a] font-semibold hover:bg-emerald-400 transition"
-            >
-              Start Shopping
-            </Link>
+                  {isOpen && (
+                    <div className="space-y-4 p-5 sm:p-6">
+                      {order.products.map((item) => (
+                        <div className="flex items-center gap-4" key={item._id || item.product?._id}>
+                          <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-[#07130f]">{item.product?.images?.[0]?.url && <img alt="" className="h-full w-full object-cover" src={item.product.images[0].url} />}</div>
+                          <div className="min-w-0 flex-1"><p className="truncate text-sm">{item.product?.productName || "Removed product"}</p><p className="mt-1 text-xs text-gray-500">Quantity {item.quantity}</p></div>
+                          <p className="text-sm">₹{(item.price * item.quantity).toLocaleString("en-IN")}</p>
+                        </div>
+                      ))}
+                      <div className="border-t border-emerald-900/50 pt-4 text-sm text-gray-400">
+                        <p>{order.shippingAddress?.fullname} · {order.shippingAddress?.mobile}</p>
+                        <p>{order.shippingAddress?.houseNo}, {order.shippingAddress?.street}, {order.shippingAddress?.city}, {order.shippingAddress?.state} {order.shippingAddress?.pincode}</p>
+                        <p className="mt-2">Payment: {order.paymentInfo?.paymentMethod} ({order.paymentInfo?.paymentStatus})</p>
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex flex-wrap justify-end gap-3 p-4">
+                    {["PENDING", "CONFIRMED"].includes(order.orderStatus) && <button className="rounded-lg border border-red-900 px-4 py-2 text-sm text-red-200 disabled:opacity-50" disabled={busyOrder === order._id} onClick={() => cancelOrder(order._id)} type="button">{busyOrder === order._id ? "Cancelling…" : "Cancel order"}</button>}
+                    <button className="rounded-lg border border-emerald-800 px-4 py-2 text-sm text-emerald-300" onClick={() => setExpandedOrder(isOpen ? "" : order._id)} type="button">{isOpen ? "Hide details" : "Order details"}</button>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         )}
       </div>
-    </div>
+    </main>
   );
 }
 

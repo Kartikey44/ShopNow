@@ -1,4 +1,3 @@
-import React from "react";
 import { Link } from "react-router-dom";
 import { heroImages } from "../assets/frontend_assets/assets";
 
@@ -19,15 +18,6 @@ function Hero() {
 
         <div className="absolute inset-0 bg-black/45" />
         <div className="absolute inset-0 bg-linear-to-r from-black/80 via-black/35 to-transparent" />
-      </div>
-
-      {/* Discount Badge */}
-      <div className="absolute top-32 right-6 md:right-16 z-20 flex h-24 w-24 md:h-32 md:w-32 rotate-12 items-center justify-center rounded-full bg-white text-black shadow-[0_0_40px_rgba(255,255,255,0.25)]">
-        <div className="text-center">
-          <p className="text-[10px] md:text-xs font-medium">UP TO</p>
-          <p className="text-2xl md:text-3xl font-black">50%</p>
-          <p className="text-[10px] md:text-xs font-medium">OFF</p>
-        </div>
       </div>
 
       {/* Hero Content */}
@@ -67,32 +57,6 @@ function Hero() {
             </Link>
           </div>
 
-          <div className="mt-12 flex items-center gap-8">
-            <div>
-              <p className="text-xl font-bold">50+</p>
-              <p className="mt-1 text-[10px] uppercase tracking-wider text-white/50">
-                Styles
-              </p>
-            </div>
-
-            <div className="h-8 w-px bg-white/20" />
-
-            <div>
-              <p className="text-xl font-bold">3</p>
-              <p className="mt-1 text-[10px] uppercase tracking-wider text-white/50">
-                Collections
-              </p>
-            </div>
-
-            <div className="h-8 w-px bg-white/20" />
-
-            <div>
-              <p className="text-xl font-bold">24/7</p>
-              <p className="mt-1 text-[10px] uppercase tracking-wider text-white/50">
-                Support
-              </p>
-            </div>
-          </div>
         </div>
       </div>
 

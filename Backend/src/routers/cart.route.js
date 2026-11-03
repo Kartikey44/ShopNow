@@ -3,6 +3,8 @@ import {
   addToCart,
   removeFromCart,
   getCart,
+  updateCartQuantity,
+  clearCart,
 } from "../controllers/cart.controller.js";
 import { protectRoute } from "../middlewares/validate.middleware.js";
 
@@ -12,6 +14,8 @@ const router = express.Router();
 router.use(protectRoute);
 
 router.post("/add", addToCart);
+router.delete("/clear", clearCart);
+router.patch("/:productId", updateCartQuantity);
 router.delete("/remove", removeFromCart);
 router.get("/", getCart);
 

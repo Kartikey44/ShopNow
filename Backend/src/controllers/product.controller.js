@@ -1,54 +1,100 @@
+import mongoose from "mongoose";
 import Product from "../schemas/product.schema.js";
 import Category from "../schemas/category.schema.js";
 import ErrorHandler from "../utils/handleError.js";
 import Review from "../schemas/review.schema.js";
-import ApiFeatures from "../utils/apiFeatures.js";
 import { catchAsyncErrors } from "../middlewares/catchAsyncErrors.js";
+import { deleteImages, uploadImages } from "../services/image.service.js";
+import { validateProductFields } from "../validators/product.validator.js";
+
+const allowedProductFields = [
+  "productName",
+  "description",
+  "brand",
+  "originalPrice",
+  "discountPrice",
+  "stockQuantity",
+  "availability",
+  "slug",
+];
 
 // Get All Products
 // Get All Products
 export const getProducts = catchAsyncErrors(async (req, res, next) => {
-  const apiFeatures = new ApiFeatures(
-    Product.find().populate("category"),
-    req.query,
-  )
-    .search()
-    .filter()
-    .sort()
-    .limitFields();
-
-  // Count matching products before pagination
-  const totalCount = await Product.countDocuments(
-    apiFeatures.query.getFilter(),
-  );
-
-  // Apply pagination
-  apiFeatures.pagination();
-
-  // Get products
-  const products = await apiFeatures.query;
-
-  const { resultPerPage, currentPage, offset } = apiFeatures.paginationData;
-
-  const totalPages = Math.ceil(totalCount / resultPerPage);
-  const hasFilter =
-    req.query.keyword ||
-    req.query.brand ||
-    req.query.category ||
-    req.query.categoryName;
-
-  if (hasFilter && totalCount === 0) {
-    return next(new ErrorHandler("No products found", 404));
+  const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(50, Math.max(1, Number.parseInt(req.query.limit, 10) || 12));
+  const filter = {};
+  const keyword = String(req.query.keyword || "").trim();
+  if (keyword) {
+    const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    filter.productName = { $regex: escaped, $options: "i" };
   }
-  if (currentPage > totalPages && totalCount > 0) {
-    return next(new ErrorHandler("This page doesn't exist", 404));
+  if (req.query.brand) filter.brand = String(req.query.brand);
+  if (req.query.category) {
+    if (!mongoose.isValidObjectId(req.query.category)) {
+      return next(new ErrorHandler("Category filter is invalid", 400));
+    }
+    filter.category = req.query.category;
+  }
+
+  const minimumPrice = Number(req.query.minPrice);
+  const maximumPrice = Number(req.query.maxPrice);
+  if (req.query.minPrice !== undefined || req.query.maxPrice !== undefined) {
+    if (
+      (req.query.minPrice !== undefined &&
+        (!Number.isFinite(minimumPrice) || minimumPrice < 0)) ||
+      (req.query.maxPrice !== undefined &&
+        (!Number.isFinite(maximumPrice) || maximumPrice < 0)) ||
+      (req.query.minPrice !== undefined &&
+        req.query.maxPrice !== undefined &&
+        minimumPrice > maximumPrice)
+    ) {
+      return next(new ErrorHandler("Price range is invalid", 400));
+    }
+    const priceExpressions = [];
+    if (req.query.minPrice !== undefined) {
+      priceExpressions.push({
+        $gte: [
+          { $cond: [{ $gt: ["$discountPrice", 0] }, "$discountPrice", "$originalPrice"] },
+          minimumPrice,
+        ],
+      });
+    }
+    if (req.query.maxPrice !== undefined) {
+      priceExpressions.push({
+        $lte: [
+          { $cond: [{ $gt: ["$discountPrice", 0] }, "$discountPrice", "$originalPrice"] },
+          maximumPrice,
+        ],
+      });
+    }
+    filter.$expr = { $and: priceExpressions };
+  }
+
+  const sortFields = new Set(["createdAt", "productName", "originalPrice", "averageRating"]);
+  const sortField = String(req.query.sort || "-createdAt");
+  const normalizedSort = sortField.startsWith("-") ? sortField.slice(1) : sortField;
+  const sort = sortFields.has(normalizedSort) ? sortField : "-createdAt";
+  const [totalCount, products] = await Promise.all([
+    Product.countDocuments(filter),
+    Product.find(filter)
+      .populate("category")
+      .sort(sort)
+      .skip((page - 1) * limit)
+      .limit(limit),
+  ]);
+  const totalPages = Math.ceil(totalCount / limit);
+  if (totalCount > 0 && page > totalPages) {
+    return next(new ErrorHandler("Product page not found", 404));
   }
   res.status(200).json({
     success: true,
     products,
-    resultPerPage,
+    resultPerPage: limit,
     totalCount,
-    currentPage,
+    currentPage: page,
+    totalPages,
+    hasNextPage: page < totalPages,
     productCount: products.length,
   });
 });
@@ -68,30 +114,44 @@ export const getProductById = catchAsyncErrors(async (req, res, next) => {
 
 // Create Product
 export const createProduct = catchAsyncErrors(async (req, res, next) => {
-  req.body.user = req.user.id;
-  let categoryName = req.body.category?.trim().toLowerCase();
+  const validationError = validateProductFields(req.body);
+  if (validationError) return next(new ErrorHandler(validationError, 400));
 
-  if (!categoryName) {
-    return next(new ErrorHandler("Category is required", 400));
-  }
+  const payload = Object.fromEntries(
+    allowedProductFields
+      .filter((field) => req.body[field] !== undefined)
+      .map((field) => [field, req.body[field]]),
+  );
+  payload.user = req.user._id;
+  payload.originalPrice = Number(payload.originalPrice);
+  payload.discountPrice = Number(payload.discountPrice || 0);
+  payload.stockQuantity = Number(payload.stockQuantity || 0);
+  payload.availability =
+    req.body.availability !== "false" && req.body.availability !== false;
+  const categoryValue = String(req.body.category || "").trim();
 
-  // Check whether category already exists
-  let category = await Category.findOne({
-    categoryName: categoryName,
-  });
-
-  // Create category if it doesn't exist
+  let category = await Category.findById(categoryValue).catch(() => null);
   if (!category) {
-    category = await Category.create({
-      categoryName: categoryName,
-    });
+    const categoryName = categoryValue.toLowerCase();
+    category = await Category.findOneAndUpdate(
+      { categoryName },
+      { $setOnInsert: { categoryName } },
+      { returnDocument: "after", upsert: true, runValidators: true },
+    );
   }
 
-  // Replace category name with category ObjectId
-  req.body.category = category._id;
+  const images = req.files?.length ? await uploadImages(req.files) : req.body.images;
+  if (!Array.isArray(images) || images.length === 0 || images.some((image) => !image?.url || !image?.public_id)) {
+    return next(new ErrorHandler("At least one valid product image is required", 400));
+  }
 
-  // Create product
-  const product = await Product.create(req.body);
+  let product;
+  try {
+    product = await Product.create({ ...payload, category: category._id, images });
+  } catch (error) {
+    if (req.files?.length) await deleteImages(images).catch(() => {});
+    throw error;
+  }
 
   res.status(201).json({
     success: true,
@@ -100,16 +160,58 @@ export const createProduct = catchAsyncErrors(async (req, res, next) => {
 });
 // Update Product
 export const updateProduct = catchAsyncErrors(async (req, res, next) => {
-  let product = await Product.findById(req.params.id);
+  const product = await Product.findById(req.params.id);
 
   if (!product) {
     return next(new ErrorHandler("Product not found", 404));
   }
 
-  product = await Product.findByIdAndUpdate(req.params.id, req.body, {
-    new: true,
-    runValidators: true,
-  });
+  if (!Object.keys(req.body).length && !req.files?.length) {
+    return next(new ErrorHandler("Provide product fields or replacement images", 400));
+  }
+  const validationError = validateProductFields(req.body, { partial: true });
+  if (validationError) return next(new ErrorHandler(validationError, 400));
+  const updates = Object.fromEntries(
+    allowedProductFields
+      .filter((field) => req.body[field] !== undefined)
+      .map((field) => [field, req.body[field]]),
+  );
+  if (updates.originalPrice !== undefined) updates.originalPrice = Number(updates.originalPrice);
+  if (updates.discountPrice !== undefined) updates.discountPrice = Number(updates.discountPrice);
+  if (updates.stockQuantity !== undefined) updates.stockQuantity = Number(updates.stockQuantity);
+  if (req.body.availability !== undefined) {
+    updates.availability =
+      req.body.availability !== "false" && req.body.availability !== false;
+  }
+  if (req.body.category) {
+    const categoryValue = String(req.body.category).trim();
+    let category = await Category.findById(categoryValue).catch(() => null);
+    if (!category) {
+      category = await Category.findOne({ categoryName: categoryValue.toLowerCase() });
+    }
+    if (!category) return next(new ErrorHandler("Category not found", 404));
+    updates.category = category._id;
+  }
+
+  const newImages = req.files?.length ? await uploadImages(req.files) : null;
+  const oldImages = product.images;
+  if (newImages) updates.images = newImages;
+  else if (req.body.images !== undefined) {
+    if (!Array.isArray(req.body.images) || req.body.images.some((image) => !image?.url || !image?.public_id)) {
+      return next(new ErrorHandler("Product images must include valid URLs and public IDs", 400));
+    }
+    updates.images = req.body.images;
+  }
+
+  try {
+    Object.assign(product, updates);
+    await product.save();
+  } catch (error) {
+    if (newImages) await deleteImages(newImages).catch(() => {});
+    throw error;
+  }
+
+  if (newImages) await deleteImages(oldImages);
 
   res.status(200).json({
     success: true,
@@ -125,6 +227,7 @@ export const deleteProduct = catchAsyncErrors(async (req, res, next) => {
     return next(new ErrorHandler("Product not found", 404));
   }
 
+  await deleteImages(product.images);
   await product.deleteOne();
 
   res.status(200).json({
@@ -134,7 +237,7 @@ export const deleteProduct = catchAsyncErrors(async (req, res, next) => {
 });
 
 export const getAdminProduct = catchAsyncErrors(async (req, res, next) => {
-  const product = await Product.find();
+  const product = await Product.find().populate("category").sort({ createdAt: -1 });
   res.status(200).json({
     success: true,
     product,
@@ -144,9 +247,6 @@ export const getAdminProduct = catchAsyncErrors(async (req, res, next) => {
 export const createProductReview = catchAsyncErrors(async (req, res, next) => {
   const { id } = req.params;
   const { rating, comment } = req.body;
-
-  console.log("Product ID:", id);
-  console.log("User ID:", req.user._id);
 
   const product = await Product.findById(id);
 

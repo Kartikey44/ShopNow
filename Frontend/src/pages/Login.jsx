@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Eye, EyeOff, ArrowRight } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -11,6 +11,7 @@ import {
 
 function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const dispatch = useDispatch();
   const authError = useSelector(selectAuthError);
   const authStatus = useSelector(selectAuthStatus);
@@ -148,6 +149,14 @@ function Login() {
                 className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200"
               >
                 {error || authError}
+              </p>
+            )}
+            {location.state?.message && (
+              <p
+                className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200"
+                role="status"
+              >
+                {location.state.message}
               </p>
             )}
 

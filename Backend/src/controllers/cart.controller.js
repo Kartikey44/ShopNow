@@ -1,167 +1,125 @@
+import mongoose from "mongoose";
 import Cart from "../schemas/cart.schema.js";
 import Product from "../schemas/product.schema.js";
+import ErrorHandler from "../utils/handleError.js";
+import { catchAsyncErrors } from "../middlewares/catchAsyncErrors.js";
 
-export const addToCart = async (req, res) => {
-  try {
-    const { productId, quantity = 1 } = req.body;
-    const userId = req.user._id;
+const refreshTotals = (cart) => {
+  cart.subtotal = Number(
+    cart.items.reduce((total, item) => total + item.price * item.quantity, 0).toFixed(2),
+  );
+  cart.discount = 0;
+  cart.tax = Number((cart.subtotal * 0.18).toFixed(2));
+  cart.finalTotal = Number((cart.subtotal + cart.tax - cart.discount).toFixed(2));
+};
 
-    if (!productId) {
-      return res.status(400).json({
-        success: false,
-        message: "Product ID is required",
-      });
-    }
+const populateCart = (cart) => cart.populate("items.product");
 
-    if (quantity < 1) {
-      return res.status(400).json({
-        success: false,
-        message: "Quantity must be at least 1",
-      });
-    }
+export const addToCart = catchAsyncErrors(async (req, res, next) => {
+  const { productId } = req.body;
+  const quantity = Number(req.body.quantity ?? 1);
+  if (!mongoose.isValidObjectId(productId)) {
+    return next(new ErrorHandler("A valid product ID is required", 400));
+  }
+  if (!Number.isInteger(quantity) || quantity < 1) {
+    return next(new ErrorHandler("Quantity must be a positive integer", 400));
+  }
 
-    const product = await Product.findById(productId);
+  const product = await Product.findById(productId);
+  if (!product) return next(new ErrorHandler("Product not found", 404));
+  if (!product.availability || product.stockQuantity < quantity) {
+    return next(new ErrorHandler("Product is out of stock", 400));
+  }
 
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Product not found",
-      });
-    }
+  const price =
+    product.discountPrice > 0 ? product.discountPrice : product.originalPrice;
+  let cart = await Cart.findOne({ user: req.user._id });
+  if (!cart) {
+    cart = new Cart({ user: req.user._id, items: [] });
+  }
 
-    if (!product.availability || product.stockQuantity < quantity) {
-      return res.status(400).json({
-        success: false,
-        message: "Product is out of stock",
-      });
-    }
-
-    // Get selling price
-    const price =
-      product.discountPrice > 0 ? product.discountPrice : product.originalPrice;
-
-    let cart = await Cart.findOne({ user: userId });
-
-    if (!cart) {
-      cart = await Cart.create({
-        user: userId,
-        items: [
-          {
-            product: productId,
-            quantity,
-            price,
-          },
-        ],
-      });
-    } else {
-      const existingItem = cart.items.find(
-        (item) => item.product.toString() === productId,
+  const existingItem = cart.items.find(
+    (item) => item.product.toString() === String(productId),
+  );
+  if (existingItem) {
+    if (existingItem.quantity + quantity > product.stockQuantity) {
+      return next(
+        new ErrorHandler("Requested quantity exceeds available stock", 400),
       );
-
-      if (existingItem) {
-        const newQuantity = existingItem.quantity + quantity;
-
-        if (newQuantity > product.stockQuantity) {
-          return res.status(400).json({
-            success: false,
-            message: "Requested quantity exceeds available stock",
-          });
-        }
-
-        existingItem.quantity = newQuantity;
-        existingItem.price = price;
-      } else {
-        cart.items.push({
-          product: productId,
-          quantity,
-          price,
-        });
-      }
-
-      await cart.save();
     }
+    existingItem.quantity += quantity;
+    existingItem.price = price;
+  } else {
+    cart.items.push({ product: productId, quantity, price });
+  }
 
-    // Calculate subtotal
-    cart.subtotal = cart.items.reduce(
-      (total, item) => total + item.price * item.quantity,
-      0,
+  refreshTotals(cart);
+  await cart.save();
+  await populateCart(cart);
+  res.status(200).json({ success: true, message: "Product added to cart", cart });
+});
+
+export const updateCartQuantity = catchAsyncErrors(async (req, res, next) => {
+  const quantity = Number(req.body.quantity);
+  if (!mongoose.isValidObjectId(req.params.productId)) {
+    return next(new ErrorHandler("A valid product ID is required", 400));
+  }
+  if (!Number.isInteger(quantity) || quantity < 1) {
+    return next(new ErrorHandler("Quantity must be a positive integer", 400));
+  }
+
+  const cart = await Cart.findOne({ user: req.user._id });
+  const item = cart?.items.find(
+    (cartItem) => cartItem.product.toString() === req.params.productId,
+  );
+  if (!item) return next(new ErrorHandler("Cart item not found", 404));
+
+  const product = await Product.findById(req.params.productId);
+  if (!product || !product.availability || quantity > product.stockQuantity) {
+    return next(
+      new ErrorHandler("Requested quantity exceeds available stock", 400),
     );
+  }
 
-    // For now
-    cart.discount = 0;
+  item.quantity = quantity;
+  item.price =
+    product.discountPrice > 0 ? product.discountPrice : product.originalPrice;
+  refreshTotals(cart);
+  await cart.save();
+  await populateCart(cart);
+  res.status(200).json({ success: true, cart });
+});
 
-    // Example 18% GST
-    cart.tax = cart.subtotal * 0.18;
+export const removeFromCart = catchAsyncErrors(async (req, res, next) => {
+  const { productId } = req.body;
+  if (!mongoose.isValidObjectId(productId)) {
+    return next(new ErrorHandler("A valid product ID is required", 400));
+  }
+  const cart = await Cart.findOne({ user: req.user._id });
+  if (!cart) return next(new ErrorHandler("Cart not found", 404));
 
-    cart.finalTotal = cart.subtotal + cart.tax - cart.discount;
+  cart.items = cart.items.filter(
+    (item) => item.product.toString() !== String(productId),
+  );
+  refreshTotals(cart);
+  await cart.save();
+  await populateCart(cart);
+  res.status(200).json({ success: true, message: "Product removed from cart", cart });
+});
 
+export const clearCart = catchAsyncErrors(async (req, res) => {
+  const cart = await Cart.findOne({ user: req.user._id });
+  if (cart) {
+    cart.items = [];
+    refreshTotals(cart);
     await cart.save();
-
-    await cart.populate("items.product");
-
-    res.status(200).json({
-      success: true,
-      message: "Product added to cart",
-      cart,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
   }
-};
+  res.status(200).json({ success: true, cart: cart || { items: [] } });
+});
 
-// Remove Product from Cart
-export const removeFromCart = async (req, res) => {
-  try {
-    const { productId } = req.body;
-    const userId = req.user._id;
-
-    const cart = await Cart.findOne({ user: userId });
-
-    if (!cart) {
-      return res.status(404).json({
-        success: false,
-        message: "Cart not found",
-      });
-    }
-
-    cart.items = cart.items.filter(
-      (item) => item.product.toString() !== productId,
-    );
-
-    await cart.save();
-    await cart.populate("items.product");
-
-    res.status(200).json({
-      success: true,
-      message: "Product removed from cart",
-      cart,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
-
-// Get User Cart
-export const getCart = async (req, res) => {
-  try {
-    const userId = req.user._id;
-
-    const cart = await Cart.findOne({ user: userId }).populate("items.product");
-
-    res.status(200).json({
-      success: true,
-      cart: cart || { items: [] },
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
+export const getCart = catchAsyncErrors(async (req, res) => {
+  const cart = await Cart.findOne({ user: req.user._id }).populate(
+    "items.product",
+  );
+  res.status(200).json({ success: true, cart: cart || { items: [] } });
+});

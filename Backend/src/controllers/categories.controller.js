@@ -1,20 +1,18 @@
-import Category from "../schemas/category.schema.js"
-import ErrorHandler from "../utils/handleError.js"
-import { catchAsyncErrors } from "../middlewares/catchAsyncErrors.js"
+import Category from "../schemas/category.schema.js";
+import Product from "../schemas/product.schema.js";
+import ErrorHandler from "../utils/handleError.js";
+import { catchAsyncErrors } from "../middlewares/catchAsyncErrors.js";
 
-// create Category
 export const createCategory = catchAsyncErrors(async (req, res, next) => {
-    const category = await Category.create(req.body);
-    console.log(category);
-    res.status(201).json({
-        success: true,
-        category,
-    });
+  const category = await Category.create(req.body);
+  res.status(201).json({
+    success: true,
+    category,
+  });
 });
-//getAllCategory
+
 export const getAllCategories = catchAsyncErrors(async (req, res, next) => {
-    const categories = await Category.find();
-    console.log(categories);
+  const categories = await Category.find();
 
   res.status(200).json({
     success: true,
@@ -22,27 +20,27 @@ export const getAllCategories = catchAsyncErrors(async (req, res, next) => {
     categories,
   });
 });
-// Get Category By Id
-export const getCategoryById = catchAsyncErrors(async (req, res, next) => {
-    const category = await Category.findByID(req.param.Id);
-    console.log(categories);
-     if (!category) {
-       return next(new ErrorHandler("Category not found", 404));
-     }
 
-    res.status(200).json({
-        success: true,
-        category,
-    });
+export const getCategoryById = catchAsyncErrors(async (req, res, next) => {
+  const category = await Category.findById(req.params.id);
+  if (!category) {
+    return next(new ErrorHandler("Category not found", 404));
+  }
+
+  res.status(200).json({
+    success: true,
+    category,
+  });
 });
-// Update Category
+
 export const updateCategory = catchAsyncErrors(async (req, res, next) => {
-    let category = await Category.findById(req.param.id);
-      if (!category) {
-        return next(new ErrorHandler("Category not found", 404));
-    }
-    category = await Category.findByIdAndUpdate(req.params.id, req.body, {
-    new: true,
+  const existingCategory = await Category.findById(req.params.id);
+  if (!existingCategory) {
+    return next(new ErrorHandler("Category not found", 404));
+  }
+
+  const category = await Category.findByIdAndUpdate(req.params.id, req.body, {
+    returnDocument: "after",
     runValidators: true,
   });
 
@@ -51,12 +49,18 @@ export const updateCategory = catchAsyncErrors(async (req, res, next) => {
     category,
   });
 });
-//Delete Category
+
 export const deleteCategory = catchAsyncErrors(async (req, res, next) => {
   const category = await Category.findById(req.params.id);
 
   if (!category) {
     return next(new ErrorHandler("Category not found", 404));
+  }
+
+  if (await Product.exists({ category: category._id })) {
+    return next(
+      new ErrorHandler("Category cannot be deleted while products use it", 409),
+    );
   }
 
   await category.deleteOne();

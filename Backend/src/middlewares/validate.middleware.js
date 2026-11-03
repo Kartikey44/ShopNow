@@ -37,6 +37,9 @@ export const protectRoute = async (req, res, next) => {
     if (!user) {
       return next(new ErrorHandler("User not found", 401));
     }
+    if (user.accountStatus === "blocked") {
+      return next(new ErrorHandler("This account has been blocked", 403));
+    }
 
     req.user = user;
 
